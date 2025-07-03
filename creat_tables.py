@@ -1,3 +1,4 @@
+
 import mysql.connector
 
 # اتصال به MySQL (قبل از ساخت دیتابیس)
@@ -87,4 +88,5 @@ CREATE TABLE IF NOT EXISTS enrollments (
 """)
 
 print("✅ دیتابیس و جدول‌ها با موفقیت ساخته شدند.")
+
 conn.close()

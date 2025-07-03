@@ -1,3 +1,8 @@
+<<<<<<< HEAD
 fastapi
 uvicorn
+=======
+fastapi
+uvicorn
+>>>>>>> 8b6fe036b4eb83cb52c76fefe047916ecc09095f
 mysql-connector-python

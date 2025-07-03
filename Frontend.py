@@ -1,3 +1,4 @@
+
 from kivymd.app import MDApp
 from kivy.lang import Builder
 from kivy.uix.screenmanager import Screen, ScreenManager
@@ -104,4 +105,6 @@ class QuranApp(MDApp):
             print("Registration failed")
 
 if __name__ == "__main__":
+
+
     QuranApp().run()
