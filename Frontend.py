@@ -81,7 +81,7 @@ class QuranApp(MDApp):
             "password": password,
             "role": "student"
         }
-        response = requests.post("http://127.0.0.1:8000/login", json=data)
+        response = requests.post("https://quran-app.up.railway.app/register", json=data)
         if response.status_code == 200:
             print("Login successful")
             # Change to another screen here
@@ -97,7 +97,7 @@ class QuranApp(MDApp):
             "password": password,
             "role": role
         }
-        response = requests.post("http://127.0.0.1:8000/register", json=data)
+        response = requests.post("https://quran-app.up.railway.app/register", json=data)
         if response.status_code == 200:
             print("Registration successful")
             self.change_screen("login")
