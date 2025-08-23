@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from jose import jwt  # اصلاح شده: from jose import jwt
+from jose import jwt
 from dotenv import load_dotenv
 import os
 import sys
@@ -83,6 +83,8 @@ async def root():
 # مسیر ثبت‌نام
 @app.post("/register", response_model=dict)
 async def register(user: User):
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -107,12 +109,16 @@ async def register(user: User):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 # مسیر ورود
 @app.post("/login", response_model=Token)
 async def login(user: User):
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -132,12 +138,16 @@ async def login(user: User):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 # مسیر دریافت اطلاعات کاربر
 @app.get("/users/me")
 async def read_users_me(token: str = Depends(lambda: None)):
+    conn = None
+    cursor = None
     try:
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")
@@ -167,6 +177,7 @@ async def read_users_me(token: str = Depends(lambda: None)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        cursor.close()
-        conn.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
