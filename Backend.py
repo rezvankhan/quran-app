@@ -167,4 +167,8 @@ async def read_users_me(token: str = Depends(lambda: None)):
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
         cursor.close()
+
         conn.close()
+
+        conn.close()
+
