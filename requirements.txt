@@ -4,9 +4,6 @@ python-jose[cryptography]==3.3.0
 passlib==1.7.4
 psycopg2-binary==2.9.7
 python-dotenv==1.0.0
-<<<<<<< HEAD
 requests==2.31.0
-=======
-requests==2.31.0
->>>>>>> 8cd55a69b2d8e909a8636475dc42efd533e3e207
+mysql-connector-python==8.2.0
 
