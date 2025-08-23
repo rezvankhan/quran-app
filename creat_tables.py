@@ -1,32 +1,45 @@
-import mysql.connector
+import os
+import psycopg2
 from contextlib import contextmanager
 from dotenv import load_dotenv
-import os
+from urllib.parse import urlparse
 
 load_dotenv()
 
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"),
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", ""),
-    "charset": "utf8mb4",
-    "collation": "utf8mb4_general_ci"
-}
+# استفاده از DATABASE_URL از environment variables
+DATABASE_URL = os.getenv('DATABASE_URL')
 
 @contextmanager
 def get_db_connection(database=None):
-    config = DB_CONFIG.copy()
-    if database:
-        config["database"] = database
-    
     conn = None
     cursor = None
+    
     try:
-        conn = mysql.connector.connect(**config)
-        cursor = conn.cursor(dictionary=True)
+        # استفاده از DATABASE_URL اگر موجود باشد
+        if DATABASE_URL:
+            parsed_url = urlparse(DATABASE_URL)
+            conn = psycopg2.connect(
+                host=parsed_url.hostname,
+                database=parsed_url.path[1:],  # حذف slash اول
+                user=parsed_url.username,
+                password=parsed_url.password,
+                port=parsed_url.port
+            )
+        else:
+            # برای توسعه محلی (Fallback)
+            conn = psycopg2.connect(
+                host=os.getenv("DB_HOST", "localhost"),
+                database=database,
+                user=os.getenv("DB_USER", "postgres"),
+                password=os.getenv("DB_PASSWORD", ""),
+                port=os.getenv("DB_PORT", "5432")
+            )
+        
+        cursor = conn.cursor()
         yield cursor, conn
         conn.commit()
-    except mysql.connector.Error as err:
+        
+    except Exception as err:
         print(f"❌ خطای دیتابیس: {err}")
         if conn:
             conn.rollback()
@@ -37,47 +50,37 @@ def get_db_connection(database=None):
         if conn:
             conn.close()
 
-def create_database():
-    try:
-        with get_db_connection() as (cursor, conn):
-            cursor.execute("CREATE DATABASE IF NOT EXISTS quran_db CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci")
-            print("✅ دیتابیس ایجاد شد")
-    except mysql.connector.Error as err:
-        print(f"❌ خطا در ایجاد دیتابیس: {err}")
-
 def create_tables():
     try:
-        with get_db_connection("quran_db") as (cursor, conn):
-            # ایجاد جدول users
+        with get_db_connection() as (cursor, conn):
+            # ایجاد جدول users (برای PostgreSQL)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    id SERIAL PRIMARY KEY,
                     username VARCHAR(100) NOT NULL UNIQUE,
                     password VARCHAR(255) NOT NULL,
-                    role ENUM('admin', 'teacher', 'student') DEFAULT 'student',
+                    role VARCHAR(20) DEFAULT 'student',
                     approved BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_username (username)
-                ) ENGINE=InnoDB
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
             """)
             
-            # ایجاد جدول lessons
+            # ایجاد جدول lessons (برای PostgreSQL)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS lessons (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    id SERIAL PRIMARY KEY,
                     title VARCHAR(255) NOT NULL,
                     description TEXT,
-                    teacher_id INT,
+                    teacher_id INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL,
-                    INDEX idx_teacher (teacher_id)
-                ) ENGINE=InnoDB
+                    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+                )
             """)
             
-            print("✅ جداول ایجاد شدند")
-    except mysql.connector.Error as err:
+            print("✅ جداول در PostgreSQL ایجاد شدند")
+            
+    except Exception as err:
         print(f"❌ خطا در ایجاد جداول: {err}")
 
 if __name__ == "__main__":
-    create_database()
     create_tables()
