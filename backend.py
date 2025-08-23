@@ -180,4 +180,8 @@ async def read_users_me(token: str = Depends(lambda: None)):
         if cursor:
             cursor.close()
         if conn:
+
             conn.close()
+
+            conn.close()
+
