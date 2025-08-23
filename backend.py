@@ -169,3 +169,4 @@ async def read_users_me(token: str = Depends(lambda: None)):
     finally:
         cursor.close()
         conn.close()
+        conn.close()
