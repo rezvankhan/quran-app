@@ -1,52 +1,121 @@
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from passlib.context import CryptContext
+from datetime import datetime, timedelta
+import jwt
+from creat_tables import get_db_connection
+from dotenv import load_dotenv
+import os
 
-from fastapi import FastAPI, HTTPException 
-from pydantic import BaseModel 
-import mysql.connector
+load_dotenv()
 
-app = FastAPI()
+app = FastAPI(title="Quran API", version="1.0.0")
 
-#MySQL (XAMPP)
+# تنظیمات CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # برای توسعه - در production محدود کنید
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-conn = mysql.connector.connect( 
-    host="localhost", 
-    user="root", password="", 
-    database="quran_db" ) 
-cursor = conn.cursor(dictionary=True)
+# رمزنگاری پسورد
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+JWT_SECRET = os.getenv("JWT_SECRET", "fallback-secret-key")
+ALGORITHM = "HS256"
 
-#-------- مدل‌های Pydantic --------
+# مدل‌های ورودی
+class User(BaseModel):
+    username: str
+    password: str
 
-class User(BaseModel): 
-    username: str 
-    password: str 
-    role: str # 'student', 'teacher', 'admin'
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
-#-------- ثبت‌نام کاربر --------
+# تابع ایجاد توکن
+def create_access_token(username: str):
+    expire = datetime.utcnow() + timedelta(days=30)  # 30 روز
+    to_encode = {"sub": username, "exp": expire}
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=ALGORITHM)
 
-@app.post("/register") 
-def register(user: User):
-    cursor.execute("SELECT * FROM users WHERE username=%s", (user.username,))
-    if cursor.fetchone():    raise HTTPException(status_code=400, detail="نام کاربری قبلاً ثبت شده است")
-    cursor.execute( "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)", (user.username, user.password, user.role) ) 
-    conn.commit() 
-    return {"message": "ثبت‌نام با موفقیت انجام شد"}
+# مسیر سلامت سرور
+@app.get("/")
+async def root():
+    return {"message": "Quran API is running", "status": "healthy"}
 
-#-------- ورود کاربر --------
+# مسیر ثبت‌نام
+@app.post("/register", response_model=dict)
+async def register(user: User):
+    try:
+        with get_db_connection("quran_db") as (cursor, conn):
+            # بررسی وجود کاربر
+            cursor.execute("SELECT id FROM users WHERE username = %s", (user.username,))
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="نام کاربری already exists")
 
-@app.post("/login") 
-def login(user: User): 
-    cursor.execute("SELECT * FROM users WHERE username=%s AND password=%s", (user.username, user.password)) 
-    result = cursor.fetchone() 
-    if result:return {"message": "ورود موفق", "user": result}
-raise HTTPException(status_code=401, detail="نام کاربری یا رمز عبور اشتباه است")
+            # هش کردن رمز عبور
+            hashed_password = pwd_context.hash(user.password)
+            
+            # ثبت کاربر جدید
+            cursor.execute(
+                "INSERT INTO users (username, password) VALUES (%s, %s)",
+                (user.username, hashed_password)
+            )
+            
+            return {"message": "User registered successfully", "status": "success"}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطای سرور: {str(e)}")
 
-#-------- تایید استاد --------
+# مسیر ورود
+@app.post("/login", response_model=Token)
+async def login(user: User):
+    try:
+        with get_db_connection("quran_db") as (cursor, conn):
+            # پیدا کردن کاربر
+            cursor.execute("SELECT * FROM users WHERE username = %s", (user.username,))
+            db_user = cursor.fetchone()
 
-@app.post("/approve_teacher/{user_id}") 
-def approve_teacher(user_id: int):
-    cursor.execute("UPDATE users SET approved=TRUE WHERE id=%s AND role='teacher'",(user_id,)) 
-    if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail="استاد یافت نشد") 
-    conn.commit() 
-    return {"message": "استاد تایید شد"}
+            if not db_user or not pwd_context.verify(user.password, db_user["password"]):
+                raise HTTPException(status_code=401, detail="Invalid credentials")
 
+            # ایجاد توکن
+            access_token = create_access_token(user.username)
+            
+            return {"access_token": access_token, "token_type": "bearer"}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطای سرور: {str(e)}")
 
+# مسیر دریافت اطلاعات کاربر
+@app.get("/users/me")
+async def read_users_me(token: str = Depends(lambda: None)):
+    try:
+        if not token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        
+        with get_db_connection("quran_db") as (cursor, conn):
+            cursor.execute("SELECT id, username, role FROM users WHERE username = %s", (username,))
+            user = cursor.fetchone()
+            
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+                
+            return user
+            
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطای سرور: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080, reload=True)

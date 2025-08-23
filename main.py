@@ -1,106 +1,76 @@
-
-
-from fastapi import FastAPI, HTTPException 
-from pydantic import BaseModel 
 import mysql.connector
+from contextlib import contextmanager
+from dotenv import load_dotenv
+import os
 
-app = FastAPI()
+load_dotenv()
 
-#MySQL (XAMPP)
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST", "localhost"),
+    "user": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", ""),
+}
 
-conn = mysql.connector.connect( 
-    host="localhost", 
-    user="root", password="", 
-    database="quran_db" ) 
-cursor = conn.cursor(dictionary=True)
+@contextmanager
+def get_db_connection(database=None):
+    config = DB_CONFIG.copy()
+    if database:
+        config["database"] = database
+    conn = mysql.connector.connect(**config)
+    try:
+        cursor = conn.cursor()
+        yield cursor
+        conn.commit()
+    except mysql.connector.Error as err:
+        print(f"Database error: {err}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
 
-#-------- مدل‌های Pydantic --------
+def create_database():
+    with get_db_connection() as cursor:
+        cursor.execute("CREATE DATABASE IF NOT EXISTS quran_db CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci")
+        print("✅ Database created successfully.")
 
-class User(BaseModel): 
-    username: str 
-    password: str 
-    role: str # 'student', 'teacher', 'admin'
+def create_tables():
+    with get_db_connection(database="quran_db") as cursor:
+        tables = [
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(100) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                role ENUM('admin', 'teacher', 'student') NOT NULL DEFAULT 'student',
+                approved BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS lessons (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                description TEXT,
+                teacher_id INT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (teacher_id) REFERENCES users(id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS student_lessons (
+                student_id INT,
+                lesson_id INT,
+                progress INT DEFAULT 0,
+                PRIMARY KEY (student_id, lesson_id),
+                FOREIGN KEY (student_id) REFERENCES users(id),
+                FOREIGN KEY (lesson_id) REFERENCES lessons(id)
+            )
+            """
+        ]
+        for table in tables:
+            cursor.execute(table)
+        print("✅ Tables created successfully.")
 
-#-------- ثبت‌نام کاربر --------
-
-@app.post("/register") 
-def register(user: User):
-    cursor.execute("SELECT * FROM users WHERE username=%s", (user.username,))
-    if cursor.fetchone():    raise HTTPException(status_code=400, detail="نام کاربری قبلاً ثبت شده است")
-    cursor.execute( "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)", (user.username, user.password, user.role) ) 
-    conn.commit() 
-    return {"message": "ثبت‌نام با موفقیت انجام شد"}
-
-#-------- ورود کاربر --------
-
-@app.post("/login") 
-def login(user: User): 
-    cursor.execute("SELECT * FROM users WHERE username=%s AND password=%s", (user.username, user.password)) 
-    result = cursor.fetchone() 
-    if result:return {"message": "ورود موفق", "user": result}
-raise HTTPException(status_code=401, detail="نام کاربری یا رمز عبور اشتباه است")
-
-#-------- تایید استاد --------
-
-@app.post("/approve_teacher/{user_id}") 
-def approve_teacher(user_id: int):
-    cursor.execute("UPDATE users SET approved=TRUE WHERE id=%s AND role='teacher'",(user_id,)) 
-    if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail="استاد یافت نشد") 
-    conn.commit() 
-    return {"message": "استاد تایید شد"}
-
-
-
-
-from fastapi import FastAPI, HTTPException 
-from pydantic import BaseModel 
-import mysql.connector
-
-app = FastAPI()
-
-#MySQL (XAMPP)
-
-conn = mysql.connector.connect( 
-    host="localhost", 
-    user="root", password="", 
-    database="quran_db" ) 
-cursor = conn.cursor(dictionary=True)
-
-#-------- مدل‌های Pydantic --------
-
-class User(BaseModel): 
-    username: str 
-    password: str 
-    role: str # 'student', 'teacher', 'admin'
-
-#-------- ثبت‌نام کاربر --------
-
-@app.post("/register") 
-def register(user: User):
-    cursor.execute("SELECT * FROM users WHERE username=%s", (user.username,))
-    if cursor.fetchone():    raise HTTPException(status_code=400, detail="نام کاربری قبلاً ثبت شده است")
-    cursor.execute( "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)", (user.username, user.password, user.role) ) 
-    conn.commit() 
-    return {"message": "ثبت‌نام با موفقیت انجام شد"}
-
-#-------- ورود کاربر --------
-
-@app.post("/login") 
-def login(user: User): 
-    cursor.execute("SELECT * FROM users WHERE username=%s AND password=%s", (user.username, user.password)) 
-    result = cursor.fetchone() 
-    if result:return {"message": "ورود موفق", "user": result}
-raise HTTPException(status_code=401, detail="نام کاربری یا رمز عبور اشتباه است")
-
-#-------- تایید استاد --------
-
-@app.post("/approve_teacher/{user_id}") 
-def approve_teacher(user_id: int):
-    cursor.execute("UPDATE users SET approved=TRUE WHERE id=%s AND role='teacher'",(user_id,)) 
-    if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail="استاد یافت نشد") 
-    conn.commit() 
-    return {"message": "استاد تایید شد"}
-
-
+if __name__ == "__main__":
+    create_database()
+    create_tables()
