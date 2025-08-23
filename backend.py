@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-import jwt
+from jose import jwt  # اصلاح شده: from jose import jwt
+from dotenv import load_dotenv
 import os
 import sys
 from pathlib import Path
@@ -161,14 +162,10 @@ async def read_users_me(token: str = Depends(lambda: None)):
             
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
+    except jwt.JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
         cursor.close()
-
         conn.close()
-
-        conn.close()
-
