@@ -15,6 +15,21 @@ load_dotenv()
 def get_db_connection():
     conn = sqlite3.connect('quran_db.sqlite3')
     conn.row_factory = sqlite3.Row
+    
+    # ایجاد خودکار جدول اگر وجود ندارد
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'student',
+            approved BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    
     return conn
 
 app = FastAPI(title="Quran API", version="1.0.0")
