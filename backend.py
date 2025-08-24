@@ -9,6 +9,9 @@ import os
 import sys
 from pathlib import Path
 
+# برای توسعه محلی
+load_dotenv()
+
 # اضافه کردن مسیر پروژه برای imports
 sys.path.append(str(Path(__file__).parent))
 
@@ -16,33 +19,15 @@ sys.path.append(str(Path(__file__).parent))
 try:
     from creat_tables import get_db_connection
 except ImportError:
-    # برای Render
     try:
         from .creat_tables import get_db_connection
     except ImportError:
-        # Fallback نهایی
+        # Fallback نهایی برای زمانی که هیچکدام کار نکنند
         def get_db_connection():
-            # این تابع باید با PostgreSQL کار کند
-            import psycopg2
-            from urllib.parse import urlparse
-            
-            DATABASE_URL = os.getenv('DATABASE_URL')
-            if DATABASE_URL:
-                parsed_url = urlparse(DATABASE_URL)
-                conn = psycopg2.connect(
-                    host=parsed_url.hostname,
-                    database=parsed_url.path[1:],
-                    user=parsed_url.username,
-                    password=parsed_url.password,
-                    port=parsed_url.port
-                )
-                return conn
-            else:
-                # Fallback برای توسعه محلی
-                import sqlite3
-                conn = sqlite3.connect('quran_db.sqlite3')
-                conn.row_factory = sqlite3.Row
-                return conn
+            import sqlite3
+            conn = sqlite3.connect('quran_db.sqlite3')
+            conn.row_factory = sqlite3.Row
+            return conn
 
 app = FastAPI(title="Quran API", version="1.0.0")
 
@@ -90,7 +75,7 @@ async def register(user: User):
         cursor = conn.cursor()
         
         # بررسی وجود کاربر
-        cursor.execute("SELECT id FROM users WHERE username = %s", (user.username,))
+        cursor.execute("SELECT id FROM users WHERE username = ?", (user.username,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Username already exists")
 
@@ -99,7 +84,7 @@ async def register(user: User):
         
         # ثبت کاربر جدید
         cursor.execute(
-            "INSERT INTO users (username, password) VALUES (%s, %s)",
+            "INSERT INTO users (username, password) VALUES (?, ?)",
             (user.username, hashed_password)
         )
         
@@ -124,7 +109,7 @@ async def login(user: User):
         cursor = conn.cursor()
         
         # پیدا کردن کاربر
-        cursor.execute("SELECT * FROM users WHERE username = %s", (user.username,))
+        cursor.execute("SELECT * FROM users WHERE username = ?", (user.username,))
         db_user = cursor.fetchone()
 
         if not db_user or not pwd_context.verify(user.password, db_user["password"]):
@@ -158,7 +143,7 @@ async def read_users_me(token: str = Depends(lambda: None)):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT id, username, role FROM users WHERE username = %s", (username,))
+        cursor.execute("SELECT id, username, role FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
         
         if not user:
@@ -180,8 +165,4 @@ async def read_users_me(token: str = Depends(lambda: None)):
         if cursor:
             cursor.close()
         if conn:
-
             conn.close()
-
-            conn.close()
-
