@@ -160,3 +160,4 @@ async def read_users_me(token: str = Depends(lambda: None)):
     finally:
         if conn:
             conn.close()
+            conn.close()
