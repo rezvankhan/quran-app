@@ -6,43 +6,31 @@ from datetime import datetime, timedelta
 from jose import jwt
 from dotenv import load_dotenv
 import os
-import sys
-from pathlib import Path
+import sqlite3
 
-# اضافه کردن مسیر پروژه برای imports
-sys.path.append(str(Path(__file__).parent))
+# برای توسعه محلی
+load_dotenv()
 
-# Import با handling خطا برای Render
-try:
-    from creat_tables import get_db_connection
-except ImportError:
-    # برای Render
-    try:
-        from .creat_tables import get_db_connection
-    except ImportError:
-        # Fallback نهایی
-        def get_db_connection():
-            # این تابع باید با PostgreSQL کار کند
-            import psycopg2
-            from urllib.parse import urlparse
-            
-            DATABASE_URL = os.getenv('DATABASE_URL')
-            if DATABASE_URL:
-                parsed_url = urlparse(DATABASE_URL)
-                conn = psycopg2.connect(
-                    host=parsed_url.hostname,
-                    database=parsed_url.path[1:],
-                    user=parsed_url.username,
-                    password=parsed_url.password,
-                    port=parsed_url.port
-                )
-                return conn
-            else:
-                # Fallback برای توسعه محلی
-                import sqlite3
-                conn = sqlite3.connect('quran_db.sqlite3')
-                conn.row_factory = sqlite3.Row
-                return conn
+# تنظیمات دیتابیس - سازگار با Render
+def get_db_connection():
+    conn = sqlite3.connect('quran_db.sqlite3')
+    conn.row_factory = sqlite3.Row
+    
+    # ایجاد خودکار جدول اگر وجود ندارد
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'student',
+            approved BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    
+    return conn
 
 app = FastAPI(title="Quran API", version="1.0.0")
 
@@ -84,13 +72,12 @@ async def root():
 @app.post("/register", response_model=dict)
 async def register(user: User):
     conn = None
-    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
         # بررسی وجود کاربر
-        cursor.execute("SELECT id FROM users WHERE username = %s", (user.username,))
+        cursor.execute("SELECT id FROM users WHERE username = ?", (user.username,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Username already exists")
 
@@ -99,7 +86,7 @@ async def register(user: User):
         
         # ثبت کاربر جدید
         cursor.execute(
-            "INSERT INTO users (username, password) VALUES (%s, %s)",
+            "INSERT INTO users (username, password) VALUES (?, ?)",
             (user.username, hashed_password)
         )
         
@@ -109,8 +96,6 @@ async def register(user: User):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        if cursor:
-            cursor.close()
         if conn:
             conn.close()
 
@@ -118,13 +103,12 @@ async def register(user: User):
 @app.post("/login", response_model=Token)
 async def login(user: User):
     conn = None
-    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
         # پیدا کردن کاربر
-        cursor.execute("SELECT * FROM users WHERE username = %s", (user.username,))
+        cursor.execute("SELECT * FROM users WHERE username = ?", (user.username,))
         db_user = cursor.fetchone()
 
         if not db_user or not pwd_context.verify(user.password, db_user["password"]):
@@ -138,8 +122,6 @@ async def login(user: User):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        if cursor:
-            cursor.close()
         if conn:
             conn.close()
 
@@ -147,7 +129,6 @@ async def login(user: User):
 @app.get("/users/me")
 async def read_users_me(token: str = Depends(lambda: None)):
     conn = None
-    cursor = None
     try:
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")
@@ -158,7 +139,7 @@ async def read_users_me(token: str = Depends(lambda: None)):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT id, username, role FROM users WHERE username = %s", (username,))
+        cursor.execute("SELECT id, username, role FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
         
         if not user:
@@ -177,11 +158,5 @@ async def read_users_me(token: str = Depends(lambda: None)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        if cursor:
-            cursor.close()
         if conn:
-
             conn.close()
-
-            conn.close()
-

@@ -3,9 +3,11 @@ services:
     name: quran-global-api
     env: python
     region: frankfurt # یا virginia, oregon
-    region: frankfurt  # یا virginia, oregon
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn backend:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: JWT_SECRET
+        generateValue: true
