@@ -6,28 +6,16 @@ from datetime import datetime, timedelta
 from jose import jwt
 from dotenv import load_dotenv
 import os
-import sys
-from pathlib import Path
+import sqlite3
 
 # برای توسعه محلی
 load_dotenv()
 
-# اضافه کردن مسیر پروژه برای imports
-sys.path.append(str(Path(__file__).parent))
-
-# Import با handling خطا برای Render
-try:
-    from creat_tables import get_db_connection
-except ImportError:
-    try:
-        from .creat_tables import get_db_connection
-    except ImportError:
-        # Fallback نهایی برای زمانی که هیچکدام کار نکنند
-        def get_db_connection():
-            import sqlite3
-            conn = sqlite3.connect('quran_db.sqlite3')
-            conn.row_factory = sqlite3.Row
-            return conn
+# تنظیمات دیتابیس - سازگار با Render
+def get_db_connection():
+    conn = sqlite3.connect('quran_db.sqlite3')
+    conn.row_factory = sqlite3.Row
+    return conn
 
 app = FastAPI(title="Quran API", version="1.0.0")
 
@@ -69,7 +57,6 @@ async def root():
 @app.post("/register", response_model=dict)
 async def register(user: User):
     conn = None
-    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -94,8 +81,6 @@ async def register(user: User):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        if cursor:
-            cursor.close()
         if conn:
             conn.close()
 
@@ -103,7 +88,6 @@ async def register(user: User):
 @app.post("/login", response_model=Token)
 async def login(user: User):
     conn = None
-    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -123,8 +107,6 @@ async def login(user: User):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        if cursor:
-            cursor.close()
         if conn:
             conn.close()
 
@@ -132,7 +114,6 @@ async def login(user: User):
 @app.get("/users/me")
 async def read_users_me(token: str = Depends(lambda: None)):
     conn = None
-    cursor = None
     try:
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")
@@ -162,7 +143,5 @@ async def read_users_me(token: str = Depends(lambda: None)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        if cursor:
-            cursor.close()
         if conn:
             conn.close()
