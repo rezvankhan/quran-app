@@ -7,10 +7,11 @@ from kivymd.toast import toast
 import requests
 from kivy.clock import Clock
 import threading
+from functools import partial
 
 # ==============================
-# آدرس سرور آنلاین شما
-BASE_URL = "https://quran-app-kw38.onrender.com"  # ✅ آدرس صحیح
+# Online server address
+BASE_URL = "https://quran-app-kw38.onrender.com"
 # ==============================
 
 KV = """
@@ -23,34 +24,34 @@ ScreenManager:
     name: "login"
     MDFloatLayout:
         MDLabel:
-            text: "سیستم ورود"
+            text: "Login System"
             halign: "center"
             font_style: "H4"
             pos_hint: {"center_x": 0.5, "center_y": 0.8}
             
         MDTextField:
             id: username
-            hint_text: "نام کاربری"
+            hint_text: "Username"
             size_hint_x: 0.8
             pos_hint: {'center_x': 0.5, 'center_y': 0.6}
             mode: "rectangle"
             
         MDTextField:
             id: password
-            hint_text: "رمز عبور"
+            hint_text: "Password"
             password: True
             size_hint_x: 0.8
             pos_hint: {'center_x': 0.5, 'center_y': 0.5}
             mode: "rectangle"
             
         MDRaisedButton:
-            text: "ورود"
+            text: "Login"
             size_hint_x: 0.5
             pos_hint: {'center_x': 0.5, 'center_y': 0.4}
             on_release: app.login()
             
         MDRaisedButton:
-            text: "ثبت نام"
+            text: "Register"
             size_hint_x: 0.5
             pos_hint: {'center_x': 0.5, 'center_y': 0.3}
             on_release: app.root.current = 'register'
@@ -59,34 +60,34 @@ ScreenManager:
     name: "register"
     MDFloatLayout:
         MDLabel:
-            text: "ثبت نام کاربر"
+            text: "User Registration"
             halign: "center"
             font_style: "H4"
             pos_hint: {"center_x": 0.5, "center_y": 0.8}
             
         MDTextField:
             id: reg_username
-            hint_text: "نام کاربری"
+            hint_text: "Username"
             size_hint_x: 0.8
             pos_hint: {'center_x': 0.5, 'center_y': 0.6}
             mode: "rectangle"
             
         MDTextField:
             id: reg_password
-            hint_text: "رمز عبور"
+            hint_text: "Password"
             password: True
             size_hint_x: 0.8
             pos_hint: {'center_x': 0.5, 'center_y': 0.5}
             mode: "rectangle"
             
         MDRaisedButton:
-            text: "تکمیل ثبت نام"
+            text: "Complete Registration"
             size_hint_x: 0.5
             pos_hint: {'center_x': 0.5, 'center_y': 0.4}
             on_release: app.register()
             
         MDRaisedButton:
-            text: "بازگشت"
+            text: "Back to Login"
             size_hint_x: 0.5
             pos_hint: {'center_x': 0.5, 'center_y': 0.3}
             on_release: app.root.current = 'login'
@@ -96,16 +97,29 @@ ScreenManager:
     MDFloatLayout:
         MDLabel:
             id: welcome_label
-            text: "خوش آمدید!"
+            text: "Welcome!"
             halign: "center"
             font_style: "H4"
+            pos_hint: {"center_x": 0.5, "center_y": 0.7}
+            
+        MDLabel:
+            id: user_info
+            text: ""
+            halign: "center"
+            font_style: "Subtitle1"
             pos_hint: {"center_x": 0.5, "center_y": 0.6}
             
         MDRaisedButton:
-            text: "خروج"
+            text: "Logout"
             size_hint_x: 0.4
             pos_hint: {"center_x": 0.5, "center_y": 0.4}
             on_release: app.logout()
+            
+        MDRaisedButton:
+            text: "Refresh"
+            size_hint_x: 0.4
+            pos_hint: {"center_x": 0.5, "center_y": 0.3}
+            on_release: app.refresh_user_info()
 """
 
 class LoginScreen(Screen):
@@ -123,10 +137,14 @@ class QDBApp(MDApp):
         self.theme_cls.theme_style = "Light"
         self.sm = Builder.load_string(KV)
         self.user_token = None
+        self.username = None
         return self.sm
 
     def show_toast(self, message):
         Clock.schedule_once(lambda dt: toast(message), 0)
+
+    def show_error_message(self, error_message, dt):
+        self.show_toast(f"Error: {error_message}")
 
     def login(self):
         screen = self.sm.get_screen('login')
@@ -134,35 +152,41 @@ class QDBApp(MDApp):
         password = screen.ids.password.text.strip()
         
         if not username or not password:
-            self.show_toast("لطفاً نام کاربری و رمز عبور را وارد کنید")
+            self.show_toast("Please enter username and password")
             return
 
         def login_thread():
             try:
+                print(f"Connecting to: {BASE_URL}/login")
                 response = requests.post(
                     f"{BASE_URL}/login",
                     json={"username": username, "password": password},
-                    timeout=10
+                    timeout=15
                 )
+                
+                print(f"Status: {response.status_code}")
+                print(f"Response: {response.text}")
                 
                 if response.status_code == 200:
                     token = response.json().get("access_token")
                     Clock.schedule_once(lambda dt: self.login_success(username, token))
                 else:
-                    error_msg = response.json().get("detail", "خطا در ورود")
-                    Clock.schedule_once(lambda dt: self.show_toast(f"خطا: {error_msg}"))
+                    error_msg = response.json().get("detail", "Login error")
+                    Clock.schedule_once(partial(self.show_error_message, error_msg), 0)
                     
             except requests.exceptions.RequestException as e:
-                Clock.schedule_once(lambda dt, error=e: self.show_toast(f"خطای اتصال: {str(error)}"), 0)
+                Clock.schedule_once(partial(self.show_error_message, f"Connection error: {str(e)}"), 0)
 
         threading.Thread(target=login_thread, daemon=True).start()
 
     def login_success(self, username, token):
-        self.show_toast("ورود موفقیت‌آمیز بود")
-        dashboard = self.sm.get_screen('dashboard')
-        dashboard.ids.welcome_label.text = f"خوش آمدید، {username}!"
-        self.sm.current = 'dashboard'
+        self.show_toast("Login successful")
+        self.username = username
         self.user_token = token
+        dashboard = self.sm.get_screen('dashboard')
+        dashboard.ids.welcome_label.text = f"Welcome, {username}!"
+        dashboard.ids.user_info.text = f"Token: {token[:20]}..." if token else "No token"
+        self.sm.current = 'dashboard'
 
     def register(self):
         screen = self.sm.get_screen('register')
@@ -170,34 +194,38 @@ class QDBApp(MDApp):
         password = screen.ids.reg_password.text.strip()
         
         if not username or not password:
-            self.show_toast("لطفاً نام کاربری و رمز عبور را وارد کنید")
+            self.show_toast("Please enter username and password")
             return
         
         if len(password) < 6:
-            self.show_toast("رمز عبور باید حداقل 6 کاراکتر باشد")
+            self.show_toast("Password must be at least 6 characters")
             return
 
         def register_thread():
             try:
+                print(f"Connecting to: {BASE_URL}/register")
                 response = requests.post(
                     f"{BASE_URL}/register",
                     json={"username": username, "password": password},
-                    timeout=10
+                    timeout=15
                 )
+                
+                print(f"Status: {response.status_code}")
+                print(f"Response: {response.text}")
                 
                 if response.status_code == 200:
                     Clock.schedule_once(lambda dt: self.register_success())
                 else:
-                    error_msg = response.json().get("detail", "خطا در ثبت‌نام")
-                    Clock.schedule_once(lambda dt: self.show_toast(f"خطا: {error_msg}"))
+                    error_msg = response.json().get("detail", "Registration error")
+                    Clock.schedule_once(partial(self.show_error_message, error_msg), 0)
                     
             except requests.exceptions.RequestException as e:
-                Clock.schedule_once(lambda dt, error=e: self.show_toast(f"خطای اتصال: {str(error)}"), 0)
+                Clock.schedule_once(partial(self.show_error_message, f"Connection error: {str(e)}"), 0)
 
         threading.Thread(target=register_thread, daemon=True).start()
 
     def register_success(self):
-        self.show_toast("ثبت‌نام موفقیت‌آمیز بود")
+        self.show_toast("Registration successful")
         screen = self.sm.get_screen('register')
         screen.ids.reg_username.text = ""
         screen.ids.reg_password.text = ""
@@ -206,7 +234,14 @@ class QDBApp(MDApp):
     def logout(self):
         self.sm.current = 'login'
         self.user_token = None
-        self.show_toast("خروج انجام شد")
+        self.username = None
+        self.show_toast("Logged out successfully")
+
+    def refresh_user_info(self):
+        if self.username and self.user_token:
+            dashboard = self.sm.get_screen('dashboard')
+            dashboard.ids.user_info.text = f"User: {self.username}\nToken: {self.user_token[:20]}..."
+            self.show_toast("Information refreshed")
 
 if __name__ == "__main__":
     QDBApp().run()
