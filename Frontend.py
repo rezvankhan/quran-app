@@ -9,8 +9,8 @@ from kivy.clock import Clock
 import threading
 
 # ==============================
-# برای تست روی شبکه محلی - در production تغییر دهید
-BASE_URL = "http://192.168.1.100:8080"  # IP کامپیوتر خودتان
+# آدرس سرور آنلاین شما
+BASE_URL = "https://quran-app-kw38.onrender.com"  # ✅ آدرس صحیح
 # ==============================
 
 KV = """
@@ -122,6 +122,7 @@ class QDBApp(MDApp):
         self.theme_cls.primary_palette = "Teal"
         self.theme_cls.theme_style = "Light"
         self.sm = Builder.load_string(KV)
+        self.user_token = None
         return self.sm
 
     def show_toast(self, message):
@@ -152,7 +153,7 @@ class QDBApp(MDApp):
                     Clock.schedule_once(lambda dt: self.show_toast(f"خطا: {error_msg}"))
                     
             except requests.exceptions.RequestException as e:
-                Clock.schedule_once(lambda dt: self.show_toast(f"خطای اتصال: {str(e)}"))
+                Clock.schedule_once(lambda dt, error=e: self.show_toast(f"خطای اتصال: {str(error)}"), 0)
 
         threading.Thread(target=login_thread, daemon=True).start()
 
@@ -191,7 +192,7 @@ class QDBApp(MDApp):
                     Clock.schedule_once(lambda dt: self.show_toast(f"خطا: {error_msg}"))
                     
             except requests.exceptions.RequestException as e:
-                Clock.schedule_once(lambda dt: self.show_toast(f"خطای اتصال: {str(e)}"))
+                Clock.schedule_once(lambda dt, error=e: self.show_toast(f"خطای اتصال: {str(error)}"), 0)
 
         threading.Thread(target=register_thread, daemon=True).start()
 
@@ -204,6 +205,7 @@ class QDBApp(MDApp):
 
     def logout(self):
         self.sm.current = 'login'
+        self.user_token = None
         self.show_toast("خروج انجام شد")
 
 if __name__ == "__main__":
