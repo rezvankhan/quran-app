@@ -5,6 +5,8 @@ from kivymd.uix.button import MDRaisedButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.dialog import MDDialog
 from kivymd.toast import toast
+from kivy.graphics import Color, Rectangle
+from kivy.uix.boxlayout import BoxLayout
 import requests
 from kivy.clock import Clock
 import threading
@@ -15,7 +17,7 @@ BASE_URL = "https://quran-app-kw38.onrender.com"
 KV = """
 #:import hex kivy.utils.get_color_from_hex
 
-<BlueBackground@BoxLayout>:
+<BlueLayout@BoxLayout>:
     canvas.before:
         Color:
             rgba: hex('#87CEEB')
@@ -26,180 +28,201 @@ KV = """
 ScreenManager:
     LoginScreen:
     RegisterScreen:
-    DashboardScreen:
     TeacherRegistrationScreen:
+    DashboardScreen:
 
 <LoginScreen>:
     name: "login"
-    BlueBackground:
-        MDCard:
-            size_hint: None, None
-            size: "400dp", "500dp"
-            pos_hint: {"center_x": 0.5, "center_y": 0.5}
-            elevation: 10
-            padding: "20dp"
-            spacing: "20dp"
+    
+    BlueLayout:
+        orientation: "vertical"
+        padding: "20dp"
+        spacing: "20dp"
+        
+        MDLabel:
+            text: "Quran Education System"
+            halign: "center"
+            font_style: "H4"
+            size_hint_y: None
+            height: self.texture_size[1]
             
-            MDLabel:
-                text: "Quran Education System"
-                halign: "center"
-                font_style: "H4"
-                size_hint_y: None
-                height: self.texture_size[1]
-                
-            MDTextField:
-                id: username
-                hint_text: "Username"
-                size_hint_x: 0.8
-                pos_hint: {"center_x": 0.5}
-                mode: "rectangle"
-                
-            MDTextField:
-                id: password
-                hint_text: "Password"
-                password: True
-                size_hint_x: 0.8
-                pos_hint: {"center_x": 0.5}
-                mode: "rectangle"
-                
-            MDRaisedButton:
-                text: "Login"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.login()
-                
-            MDRaisedButton:
-                text: "Register Student"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.root.current = 'register'
-                
-            MDRaisedButton:
-                text: "Register Teacher"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.root.current = 'register_teacher'
+        MDTextField:
+            id: username
+            hint_text: "Username"
+            size_hint_x: None
+            width: "300dp"
+            pos_hint: {"center_x": 0.5}
+            mode: "rectangle"
+            
+        MDTextField:
+            id: password
+            hint_text: "Password"
+            password: True
+            size_hint_x: None
+            width: "300dp"
+            pos_hint: {"center_x": 0.5}
+            mode: "rectangle"
+            
+        MDRaisedButton:
+            text: "Login"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.login()
+            
+        MDRaisedButton:
+            text: "Register Student"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.root.current = 'register'
+            
+        MDRaisedButton:
+            text: "Register Teacher"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.root.current = 'register_teacher'
 
 <RegisterScreen>:
     name: "register"
-    BlueBackground:
-        MDCard:
-            size_hint: None, None
-            size: "400dp", "400dp"
-            pos_hint: {"center_x": 0.5, "center_y": 0.5}
-            elevation: 10
-            padding: "20dp"
-            spacing: "20dp"
+    
+    BlueLayout:
+        orientation: "vertical"
+        padding: "20dp"
+        spacing: "20dp"
+        
+        MDLabel:
+            text: "Student Registration"
+            halign: "center"
+            font_style: "H4"
             
-            MDLabel:
-                text: "Student Registration"
-                halign: "center"
-                font_style: "H4"
-                
-            MDTextField:
-                id: reg_username
-                hint_text: "Username"
-                size_hint_x: 0.8
-                pos_hint: {"center_x": 0.5}
-                
-            MDTextField:
-                id: reg_password
-                hint_text: "Password"
-                password: True
-                size_hint_x: 0.8
-                pos_hint: {"center_x": 0.5}
-                
-            MDRaisedButton:
-                text: "Register"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.register_student()
-                
-            MDRaisedButton:
-                text: "Back to Login"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.root.current = 'login'
+        MDTextField:
+            id: reg_username
+            hint_text: "Username"
+            size_hint_x: None
+            width: "300dp"
+            pos_hint: {"center_x": 0.5}
+            
+        MDTextField:
+            id: reg_password
+            hint_text: "Password"
+            password: True
+            size_hint_x: None
+            width: "300dp"
+            pos_hint: {"center_x": 0.5}
+            
+        MDRaisedButton:
+            text: "Register"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.register_student()
+            
+        MDRaisedButton:
+            text: "Back to Login"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.root.current = 'login'
 
 <TeacherRegistrationScreen>:
     name: "register_teacher"
-    BlueBackground:
-        MDCard:
-            size_hint: None, None
-            size: "400dp", "400dp"
-            pos_hint: {"center_x": 0.5, "center_y": 0.5}
-            elevation: 10
-            padding: "20dp"
-            spacing: "20dp"
+    
+    BlueLayout:
+        orientation: "vertical"
+        padding: "20dp"
+        spacing: "20dp"
+        
+        MDLabel:
+            text: "Teacher Registration"
+            halign: "center"
+            font_style: "H4"
             
-            MDLabel:
-                text: "Teacher Registration"
-                halign: "center"
-                font_style: "H4"
-                
-            MDTextField:
-                id: teacher_username
-                hint_text: "Username"
-                size_hint_x: 0.8
-                pos_hint: {"center_x": 0.5}
-                
-            MDTextField:
-                id: teacher_password
-                hint_text: "Password"
-                password: True
-                size_hint_x: 0.8
-                pos_hint: {"center_x": 0.5}
-                
-            MDRaisedButton:
-                text: "Register Teacher"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.register_teacher()
-                
-            MDRaisedButton:
-                text: "Back to Login"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.root.current = 'login'
+        MDTextField:
+            id: teacher_username
+            hint_text: "Username"
+            size_hint_x: None
+            width: "300dp"
+            pos_hint: {"center_x": 0.5}
+            
+        MDTextField:
+            id: teacher_password
+            hint_text: "Password"
+            password: True
+            size_hint_x: None
+            width: "300dp"
+            pos_hint: {"center_x": 0.5}
+            
+        MDRaisedButton:
+            text: "Register Teacher"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.register_teacher()
+            
+        MDRaisedButton:
+            text: "Back to Login"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.root.current = 'login'
 
 <DashboardScreen>:
     name: "dashboard"
-    BlueBackground:
-        MDBoxLayout:
-            orientation: "vertical"
-            padding: "20dp"
-            spacing: "20dp"
+    
+    BlueLayout:
+        orientation: "vertical"
+        padding: "20dp"
+        spacing: "20dp"
+        
+        MDLabel:
+            id: welcome_label
+            text: "Welcome!"
+            halign: "center"
+            font_style: "H4"
             
-            MDLabel:
-                id: welcome_label
-                text: "Welcome!"
-                halign: "center"
-                font_style: "H4"
-                
-            MDLabel:
-                id: user_info
-                text: ""
-                halign: "center"
-                font_style: "Subtitle1"
-                
-            MDRaisedButton:
-                text: "Create Class"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.show_create_class_dialog()
-                
-            MDRaisedButton:
-                text: "Open Chat"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.open_chat()
-                
-            MDRaisedButton:
-                text: "Logout"
-                size_hint_x: 0.6
-                pos_hint: {"center_x": 0.5}
-                on_release: app.logout()
+        MDLabel:
+            id: user_info
+            text: ""
+            halign: "center"
+            font_style: "Subtitle1"
+            
+        MDRaisedButton:
+            text: "Create Class"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.show_create_class_dialog()
+            
+        MDRaisedButton:
+            text: "Open Chat"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.open_chat()
+            
+        MDRaisedButton:
+            text: "Logout"
+            size_hint_x: None
+            width: "200dp"
+            pos_hint: {"center_x": 0.5}
+            on_release: app.logout()
 """
+
+class BlueLayout(BoxLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            from kivy.graphics import Color, Rectangle
+            from kivy.utils import get_color_from_hex
+            Color(*get_color_from_hex('#87CEEB'))
+            self.rect = Rectangle(pos=self.pos, size=self.size)
+        self.bind(pos=self.update_rect, size=self.update_rect)
+    
+    def update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
 
 class LoginScreen(Screen):
     pass
@@ -267,7 +290,6 @@ class QuranEducationApp(MDApp):
         self.username = username
         self.user_token = token
         
-        # Get user info
         def get_user_info():
             try:
                 headers = {"Authorization": f"Bearer {token}"}
