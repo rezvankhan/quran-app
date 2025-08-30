@@ -31,6 +31,23 @@ def get_db_connection():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    
+    # اضافه کردن فیلدهای جدید اگر وجود ندارند
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN full_name TEXT")
+    except sqlite3.OperationalError:
+        pass  # اگر فیلد already exists
+        
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN grade TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN specialty TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
     conn.commit()
     
     return conn
@@ -255,3 +272,8 @@ async def approve_teacher(teacher_id: int):
     finally:
         if conn:
             conn.close()
+
+# برای اجرای محلی
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
