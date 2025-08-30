@@ -11,6 +11,7 @@ from kivymd.uix.button import MDRaisedButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel
 from kivymd.uix.dialog import MDDialog
+from kivy.clock import Clock
 
 # غیرفعال کردن هشدارهای SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -61,15 +62,19 @@ class LoginScreen(Screen):
                 token = response.json()["access_token"]
                 self.manager.token = token
                 self.manager.username = username
-                self.show_dialog("Success", "Login successful!")
-                # رفتن به صفحه دشبورد
-                self.manager.current = "dashboard"
+                print(f"Login successful! Token: {token}")
+                self.show_dialog("Success", "Login successful! Going to dashboard...")
+                # تغییر صفحه با تأخیر
+                Clock.schedule_once(lambda dt: self.go_to_dashboard(), 1.0)
             else:
                 error_msg = response.json().get('detail', 'Unknown error')
                 self.show_dialog("Error", f"Login failed: {error_msg}")
                 
         except Exception as e:
             self.show_dialog("Error", f"Connection error: {str(e)}")
+    
+    def go_to_dashboard(self):
+        self.manager.current = "dashboard"
     
     def go_to_register_student(self, instance):
         self.manager.current = "register_student"
@@ -86,23 +91,23 @@ class DashboardScreen(Screen):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=40, spacing=20)
         
-        welcome_label = MDLabel(text="Welcome to Quran App!", halign="center", font_style="H4")
-        user_label = MDLabel(text="", halign="center", font_style="H6")
+        self.welcome_label = MDLabel(text="Welcome to Quran App!", halign="center", font_style="H4")
+        self.user_label = MDLabel(text="", halign="center", font_style="H6")
         
         logout_btn = MDRaisedButton(text="Logout", size_hint=(1, None), height=50)
         logout_btn.bind(on_press=self.logout)
         
-        layout.add_widget(welcome_label)
-        layout.add_widget(user_label)
+        layout.add_widget(self.welcome_label)
+        layout.add_widget(self.user_label)
         layout.add_widget(logout_btn)
         
         self.add_widget(layout)
-        self.user_label = user_label
     
     def on_enter(self):
         # نمایش نام کاربری وقتی صفحه باز می‌شود
         if hasattr(self.manager, 'username'):
             self.user_label.text = f"Logged in as: {self.manager.username}"
+            print(f"Dashboard opened for user: {self.manager.username}")
     
     def logout(self, instance):
         self.manager.token = None
@@ -161,7 +166,7 @@ class RegisterStudentScreen(Screen):
             
             if response.status_code == 200:
                 self.show_dialog("Success", "Student registration successful!")
-                self.go_to_login(instance)
+                Clock.schedule_once(lambda dt: self.go_to_login(instance), 1.0)
             else:
                 error_msg = response.json().get('detail', 'Unknown error')
                 self.show_dialog("Error", f"Registration failed: {error_msg}")
@@ -223,7 +228,7 @@ class RegisterTeacherScreen(Screen):
             
             if response.status_code == 200:
                 self.show_dialog("Success", "Teacher registration successful! Waiting for admin approval.")
-                self.go_to_login(instance)
+                Clock.schedule_once(lambda dt: self.go_to_login(instance), 1.0)
             else:
                 error_msg = response.json().get('detail', 'Unknown error')
                 self.show_dialog("Error", f"Registration failed: {error_msg}")
