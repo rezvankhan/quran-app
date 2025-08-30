@@ -10,20 +10,16 @@ from kivy.uix.boxlayout import BoxLayout
 import requests
 from kivy.clock import Clock
 import threading
-from functools import partial
+import ssl
+from kivy.utils import get_color_from_hex
+
+# برای حل مشکل SSL
+ssl._create_default_https_context = ssl._create_unverified_context
 
 BASE_URL = "https://quran-app-kw38.onrender.com"
 
 KV = """
 #:import hex kivy.utils.get_color_from_hex
-
-<BlueLayout@BoxLayout>:
-    canvas.before:
-        Color:
-            rgba: hex('#87CEEB')
-        Rectangle:
-            pos: self.pos
-            size: self.size
 
 ScreenManager:
     LoginScreen:
@@ -34,10 +30,16 @@ ScreenManager:
 <LoginScreen>:
     name: "login"
     
-    BlueLayout:
+    BoxLayout:
         orientation: "vertical"
         padding: "20dp"
         spacing: "20dp"
+        canvas.before:
+            Color:
+                rgba: hex('#87CEEB')
+            Rectangle:
+                pos: self.pos
+                size: self.size
         
         MDLabel:
             text: "Quran Education System"
@@ -87,10 +89,16 @@ ScreenManager:
 <RegisterScreen>:
     name: "register"
     
-    BlueLayout:
+    BoxLayout:
         orientation: "vertical"
         padding: "20dp"
         spacing: "20dp"
+        canvas.before:
+            Color:
+                rgba: hex('#87CEEB')
+            Rectangle:
+                pos: self.pos
+                size: self.size
         
         MDLabel:
             text: "Student Registration"
@@ -129,10 +137,16 @@ ScreenManager:
 <TeacherRegistrationScreen>:
     name: "register_teacher"
     
-    BlueLayout:
+    BoxLayout:
         orientation: "vertical"
         padding: "20dp"
         spacing: "20dp"
+        canvas.before:
+            Color:
+                rgba: hex('#87CEEB')
+            Rectangle:
+                pos: self.pos
+                size: self.size
         
         MDLabel:
             text: "Teacher Registration"
@@ -171,10 +185,16 @@ ScreenManager:
 <DashboardScreen>:
     name: "dashboard"
     
-    BlueLayout:
+    BoxLayout:
         orientation: "vertical"
         padding: "20dp"
         spacing: "20dp"
+        canvas.before:
+            Color:
+                rgba: hex('#87CEEB')
+            Rectangle:
+                pos: self.pos
+                size: self.size
         
         MDLabel:
             id: welcome_label
@@ -210,20 +230,6 @@ ScreenManager:
             on_release: app.logout()
 """
 
-class BlueLayout(BoxLayout):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        with self.canvas.before:
-            from kivy.graphics import Color, Rectangle
-            from kivy.utils import get_color_from_hex
-            Color(*get_color_from_hex('#87CEEB'))
-            self.rect = Rectangle(pos=self.pos, size=self.size)
-        self.bind(pos=self.update_rect, size=self.update_rect)
-    
-    def update_rect(self, *args):
-        self.rect.pos = self.pos
-        self.rect.size = self.size
-
 class LoginScreen(Screen):
     pass
 
@@ -248,7 +254,7 @@ class QuranEducationApp(MDApp):
     def show_toast(self, message):
         Clock.schedule_once(lambda dt: toast(message), 0)
 
-    def show_error(self, message):
+    def show_error(self, message, dt=None):
         self.dialog = MDDialog(title="Error", text=message, size_hint=(0.8, 0.3))
         self.dialog.open()
 
@@ -263,11 +269,21 @@ class QuranEducationApp(MDApp):
 
         def login_thread():
             try:
+                headers = {
+                    'accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+                
                 response = requests.post(
                     f"{BASE_URL}/login",
                     json={"username": username, "password": password},
-                    timeout=15
+                    headers=headers,
+                    timeout=15,
+                    verify=False
                 )
+                
+                print(f"Login Status: {response.status_code}")
+                print(f"Login Response: {response.text}")
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -277,11 +293,14 @@ class QuranEducationApp(MDApp):
                     else:
                         Clock.schedule_once(lambda dt: self.show_error("No token received"))
                 else:
-                    error_msg = response.json().get("detail", "Login failed")
-                    Clock.schedule_once(partial(self.show_error, error_msg), 0)
+                    try:
+                        error_msg = response.json().get("detail", "Login failed")
+                    except:
+                        error_msg = f"HTTP Error {response.status_code}"
+                    Clock.schedule_once(lambda dt: self.show_error(error_msg))
                     
             except requests.exceptions.RequestException as e:
-                Clock.schedule_once(partial(self.show_error, f"Connection error: {str(e)}"), 0)
+                Clock.schedule_once(lambda dt: self.show_error(f"Connection error: {str(e)}"))
 
         threading.Thread(target=login_thread, daemon=True).start()
 
@@ -292,11 +311,16 @@ class QuranEducationApp(MDApp):
         
         def get_user_info():
             try:
-                headers = {"Authorization": f"Bearer {token}"}
+                headers = {
+                    'accept': 'application/json',
+                    'Authorization': f'Bearer {token}'
+                }
+                
                 response = requests.get(
                     f"{BASE_URL}/users/me",
                     headers=headers,
-                    timeout=10
+                    timeout=10,
+                    verify=False
                 )
                 
                 if response.status_code == 200:
@@ -338,20 +362,33 @@ class QuranEducationApp(MDApp):
 
         def register_thread():
             try:
+                headers = {
+                    'accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+                
                 response = requests.post(
                     f"{BASE_URL}/register",
-                    json={"username": username, "password": password},
-                    timeout=15
+                    json={"username": username, "password": password, "role": "student"},
+                    headers=headers,
+                    timeout=15,
+                    verify=False
                 )
+                
+                print(f"Register Status: {response.status_code}")
+                print(f"Register Response: {response.text}")
                 
                 if response.status_code == 200:
                     Clock.schedule_once(lambda dt: self.register_success())
                 else:
-                    error_msg = response.json().get("detail", "Registration failed")
-                    Clock.schedule_once(partial(self.show_error, error_msg), 0)
+                    try:
+                        error_msg = response.json().get("detail", "Registration failed")
+                    except:
+                        error_msg = f"HTTP Error {response.status_code}"
+                    Clock.schedule_once(lambda dt: self.show_error(error_msg))
                     
             except requests.exceptions.RequestException as e:
-                Clock.schedule_once(partial(self.show_error, f"Connection error: {str(e)}"), 0)
+                Clock.schedule_once(lambda dt: self.show_error(f"Connection error: {str(e)}"))
 
         threading.Thread(target=register_thread, daemon=True).start()
 
@@ -370,20 +407,33 @@ class QuranEducationApp(MDApp):
 
         def register_thread():
             try:
+                headers = {
+                    'accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+                
                 response = requests.post(
                     f"{BASE_URL}/register",
                     json={"username": username, "password": password, "role": "teacher"},
-                    timeout=15
+                    headers=headers,
+                    timeout=15,
+                    verify=False
                 )
+                
+                print(f"Teacher Register Status: {response.status_code}")
+                print(f"Teacher Register Response: {response.text}")
                 
                 if response.status_code == 200:
                     Clock.schedule_once(lambda dt: self.register_success())
                 else:
-                    error_msg = response.json().get("detail", "Registration failed")
-                    Clock.schedule_once(partial(self.show_error, error_msg), 0)
+                    try:
+                        error_msg = response.json().get("detail", "Registration failed")
+                    except:
+                        error_msg = f"HTTP Error {response.status_code}"
+                    Clock.schedule_once(lambda dt: self.show_error(error_msg))
                     
             except requests.exceptions.RequestException as e:
-                Clock.schedule_once(partial(self.show_error, f"Connection error: {str(e)}"), 0)
+                Clock.schedule_once(lambda dt: self.show_error(f"Connection error: {str(e)}"))
 
         threading.Thread(target=register_thread, daemon=True).start()
 
