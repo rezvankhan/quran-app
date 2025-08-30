@@ -6,4 +6,4 @@ bcrypt==4.1.2
 python-dotenv==1.0.0
 requests==2.31.0
 kivy==2.3.0
-kivymd==2.0.0
+kivymd==1.2.0  # تغییر از 2.0.0 به 1.2.0
