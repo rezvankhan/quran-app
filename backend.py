@@ -3,13 +3,41 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-import jwt
+from jose import jwt
+from dotenv import load_dotenv
+import os
 import sqlite3
-from typing import Optional
 
-app = FastAPI(title="Quran Education API", version="2.0.0")
+# برای توسعه محلی
+load_dotenv()
 
-# CORS settings
+# تنظیمات دیتابیس - سازگار با Render
+def get_db_connection():
+    conn = sqlite3.connect('quran_db.sqlite3')
+    conn.row_factory = sqlite3.Row
+    
+    # ایجاد خودکار جدول اگر وجود ندارد
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'student',
+            full_name TEXT,
+            grade TEXT,
+            specialty TEXT,
+            approved BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    
+    return conn
+
+app = FastAPI(title="Quran API", version="1.0.0")
+
+# تنظیمات CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,199 +46,212 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Security settings
+# رمزنگاری پسورد
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-JWT_SECRET = "your-secret-key-change-in-production"
+JWT_SECRET = os.getenv("JWT_SECRET", "fallback-secret-key-change-in-production")
 ALGORITHM = "HS256"
 
-# Database connection
-def get_db_connection():
-    conn = sqlite3.connect('quran_db.sqlite3')
-    conn.row_factory = sqlite3.Row
-    return conn
-
-# Create tables if not exist
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            role TEXT DEFAULT 'student',
-            approved BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS classes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            level TEXT NOT NULL,
-            teacher_id INTEGER,
-            schedule_time TEXT,
-            status TEXT DEFAULT 'active',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (teacher_id) REFERENCES users (id)
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# Models
+# مدل‌های ورودی
 class User(BaseModel):
     username: str
     password: str
-    role: Optional[str] = "student"
 
-class LoginRequest(BaseModel):
+class StudentRegister(BaseModel):
     username: str
     password: str
+    full_name: str
+    grade: str
+
+class TeacherRegister(BaseModel):
+    username: str
+    password: str
+    full_name: str
+    specialty: str
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
-# Utility functions
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
-
+# تابع ایجاد توکن
 def create_access_token(username: str):
     expire = datetime.utcnow() + timedelta(days=30)
     to_encode = {"sub": username, "exp": expire}
     return jwt.encode(to_encode, JWT_SECRET, algorithm=ALGORITHM)
 
-def get_current_user(token: str):
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
-        username = payload.get("sub")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-        user = cursor.fetchone()
-        conn.close()
-        
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        
-        return dict(user)
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-# Routes
+# مسیر سلامت سرور
 @app.get("/")
 async def root():
-    return {"message": "Quran Education API is running", "status": "healthy"}
+    return {"message": "Quran API is running", "status": "healthy"}
 
-@app.post("/register")
-async def register(user: User):
-    conn = get_db_connection()
+# مسیر ثبت‌نام دانش‌آموز
+@app.post("/register-student", response_model=dict)
+async def register_student(student: StudentRegister):
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if user exists
-        cursor.execute("SELECT id FROM users WHERE username = ?", (user.username,))
+        # بررسی وجود کاربر
+        cursor.execute("SELECT id FROM users WHERE username = ?", (student.username,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Username already exists")
+
+        # هش کردن رمز عبور
+        hashed_password = pwd_context.hash(student.password)
         
-        # Hash password and insert user
-        hashed_password = get_password_hash(user.password)
+        # ثبت دانش‌آموز جدید
         cursor.execute(
-            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-            (user.username, hashed_password, user.role)
+            "INSERT INTO users (username, password, role, full_name, grade, approved) VALUES (?, ?, ?, ?, ?, ?)",
+            (student.username, hashed_password, "student", student.full_name, student.grade, True)
         )
+        
         conn.commit()
-        
-        return {"message": "User registered successfully", "status": "success"}
-        
+        return {"message": "Student registered successfully", "status": "success"}
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
-@app.post("/login")
-async def login(login_data: LoginRequest):
-    conn = get_db_connection()
+# مسیر ثبت‌نام معلم
+@app.post("/register-teacher", response_model=dict)
+async def register_teacher(teacher: TeacherRegister):
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Find user
-        cursor.execute("SELECT * FROM users WHERE username = ?", (login_data.username,))
-        user = cursor.fetchone()
+        # بررسی وجود کاربر
+        cursor.execute("SELECT id FROM users WHERE username = ?", (teacher.username,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        # هش کردن رمز عبور
+        hashed_password = pwd_context.hash(teacher.password)
         
-        if not user or not verify_password(login_data.password, user["password"]):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+        # ثبت معلم جدید (نیاز به تایید admin)
+        cursor.execute(
+            "INSERT INTO users (username, password, role, full_name, specialty, approved) VALUES (?, ?, ?, ?, ?, ?)",
+            (teacher.username, hashed_password, "teacher", teacher.full_name, teacher.specialty, False)
+        )
         
-        # Create token
-        access_token = create_access_token(login_data.username)
-        
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "id": user["id"],
-                "username": user["username"],
-                "role": user["role"],
-                "approved": bool(user["approved"])
-            }
-        }
-        
+        conn.commit()
+        return {"message": "Teacher registered successfully. Waiting for admin approval.", "status": "success"}
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
-@app.get("/users/me")
-async def read_users_me(token: str):
+# مسیر ورود
+@app.post("/login", response_model=Token)
+async def login(user: User):
+    conn = None
     try:
-        current_user = get_current_user(token)
-        return {
-            "id": current_user["id"],
-            "username": current_user["username"],
-            "role": current_user["role"],
-            "approved": bool(current_user["approved"])
-        }
-    except HTTPException as e:
-        raise e
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # پیدا کردن کاربر
+        cursor.execute("SELECT * FROM users WHERE username = ?", (user.username,))
+        db_user = cursor.fetchone()
+
+        if not db_user or not pwd_context.verify(user.password, db_user["password"]):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        # بررسی تایید حساب معلم
+        if db_user["role"] == "teacher" and not db_user["approved"]:
+            raise HTTPException(status_code=401, detail="Teacher account not approved yet")
+
+        # ایجاد توکن
+        access_token = create_access_token(user.username)
+        
+        return {"access_token": access_token, "token_type": "bearer"}
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
-# Additional endpoints for future features
-@app.post("/create-class")
-async def create_class(name: str, level: str, schedule_time: str, token: str):
+# مسیر دریافت اطلاعات کاربر
+@app.get("/users/me")
+async def read_users_me(token: str = Depends(lambda: None)):
+    conn = None
     try:
-        current_user = get_current_user(token)
-        if current_user["role"] != "teacher" or not current_user["approved"]:
-            raise HTTPException(status_code=403, detail="Only approved teachers can create classes")
+        if not token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        username = payload.get("sub")
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO classes (name, level, teacher_id, schedule_time) VALUES (?, ?, ?, ?)",
-            (name, level, current_user["id"], schedule_time)
-        )
-        conn.commit()
-        conn.close()
         
-        return {"message": "Class created successfully"}
+        cursor.execute("SELECT id, username, role, full_name, grade, specialty, approved FROM users WHERE username = ?", (username,))
+        user = cursor.fetchone()
         
-    except HTTPException as e:
-        raise e
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        return {
+            "id": user[0],
+            "username": user[1],
+            "role": user[2],
+            "full_name": user[3],
+            "grade": user[4],
+            "specialty": user[5],
+            "approved": user[6]
+        }
+            
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+# مسیر دریافت معلمان در انتظار تایید
+@app.get("/pending-teachers")
+async def get_pending_teachers():
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id, username, full_name, specialty, created_at FROM users WHERE role = 'teacher' AND approved = FALSE")
+        teachers = cursor.fetchall()
+        
+        return [dict(teacher) for teacher in teachers]
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# مسیر تایید معلم
+@app.post("/approve-teacher/{teacher_id}")
+async def approve_teacher(teacher_id: int):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("UPDATE users SET approved = TRUE WHERE id = ? AND role = 'teacher'", (teacher_id,))
+        
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+        
+        conn.commit()
+        return {"message": "Teacher approved successfully", "status": "success"}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
