@@ -21,13 +21,16 @@ def get_db_connection():
 def create_tables():
     try:
         with get_db_connection() as (cursor, conn):
-            # ایجاد جدول users
+            # ایجاد جدول users با فیلدهای کامل
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT NOT NULL UNIQUE,
                     password TEXT NOT NULL,
                     role TEXT DEFAULT 'student',
+                    full_name TEXT,
+                    grade TEXT,
+                    specialty TEXT,
                     approved BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -39,5 +42,3 @@ def create_tables():
 
 if __name__ == "__main__":
     create_tables()
-    create_tables()
-
