@@ -59,10 +59,11 @@ class LoginScreen(Screen):
             
             if response.status_code == 200:
                 token = response.json()["access_token"]
-                self.show_dialog("Success", "Login successful!")
-                # ذخیره توکن برای درخواست‌های بعدی
                 self.manager.token = token
                 self.manager.username = username
+                self.show_dialog("Success", "Login successful!")
+                # رفتن به صفحه دشبورد
+                self.manager.current = "dashboard"
             else:
                 error_msg = response.json().get('detail', 'Unknown error')
                 self.show_dialog("Error", f"Login failed: {error_msg}")
@@ -75,6 +76,39 @@ class LoginScreen(Screen):
     
     def go_to_register_teacher(self, instance):
         self.manager.current = "register_teacher"
+    
+    def show_dialog(self, title, text):
+        dialog = MDDialog(title=title, text=text, size_hint=(0.8, 0.4))
+        dialog.open()
+
+class DashboardScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=40, spacing=20)
+        
+        welcome_label = MDLabel(text="Welcome to Quran App!", halign="center", font_style="H4")
+        user_label = MDLabel(text="", halign="center", font_style="H6")
+        
+        logout_btn = MDRaisedButton(text="Logout", size_hint=(1, None), height=50)
+        logout_btn.bind(on_press=self.logout)
+        
+        layout.add_widget(welcome_label)
+        layout.add_widget(user_label)
+        layout.add_widget(logout_btn)
+        
+        self.add_widget(layout)
+        self.user_label = user_label
+    
+    def on_enter(self):
+        # نمایش نام کاربری وقتی صفحه باز می‌شود
+        if hasattr(self.manager, 'username'):
+            self.user_label.text = f"Logged in as: {self.manager.username}"
+    
+    def logout(self, instance):
+        self.manager.token = None
+        self.manager.username = None
+        self.manager.current = "login"
+        self.show_dialog("Success", "Logged out successfully!")
     
     def show_dialog(self, title, text):
         dialog = MDDialog(title=title, text=text, size_hint=(0.8, 0.4))
@@ -209,11 +243,10 @@ class QuranApp(MDApp):
         self.theme_cls.primary_palette = "Teal"
         sm = ScreenManager()
         sm.add_widget(LoginScreen(name="login"))
+        sm.add_widget(DashboardScreen(name="dashboard"))
         sm.add_widget(RegisterStudentScreen(name="register_student"))
         sm.add_widget(RegisterTeacherScreen(name="register_teacher"))
         return sm
 
 if __name__ == "__main__":
     QuranApp().run()
-
-
