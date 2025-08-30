@@ -215,3 +215,5 @@ class QuranApp(MDApp):
 
 if __name__ == "__main__":
     QuranApp().run()
+
+
