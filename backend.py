@@ -20,7 +20,7 @@ app.add_middleware(
 
 # Security settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-JWT_SECRET = "your-secret-key-change-in-production"  # در production از env variable استفاده کنید
+JWT_SECRET = "your-secret-key-change-in-production"
 ALGORITHM = "HS256"
 
 # Database connection
