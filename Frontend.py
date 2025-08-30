@@ -1,457 +1,139 @@
-from kivymd.app import MDApp
+import requests
+import json
 from kivy.lang import Builder
-from kivy.uix.screenmanager import Screen, ScreenManager
+from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.core.window import Window
+from kivy.uix.boxlayout import BoxLayout
+from kivymd.app import MDApp
 from kivymd.uix.button import MDRaisedButton
 from kivymd.uix.textfield import MDTextField
+from kivymd.uix.label import MDLabel
 from kivymd.uix.dialog import MDDialog
-from kivymd.toast import toast
-from kivy.graphics import Color, Rectangle
-from kivy.uix.boxlayout import BoxLayout
-import requests
-from kivy.clock import Clock
-import threading
-import ssl
-from kivy.utils import get_color_from_hex
 
-# برای حل مشکل SSL
-ssl._create_default_https_context = ssl._create_unverified_context
-
+# URL پایه API
 BASE_URL = "https://quran-app-kw38.onrender.com"
 
-KV = """
-#:import hex kivy.utils.get_color_from_hex
-
-ScreenManager:
-    LoginScreen:
-    RegisterScreen:
-    TeacherRegistrationScreen:
-    DashboardScreen:
-
-<LoginScreen>:
-    name: "login"
-    
-    BoxLayout:
-        orientation: "vertical"
-        padding: "20dp"
-        spacing: "20dp"
-        canvas.before:
-            Color:
-                rgba: hex('#87CEEB')
-            Rectangle:
-                pos: self.pos
-                size: self.size
-        
-        MDLabel:
-            text: "Quran Education System"
-            halign: "center"
-            font_style: "H4"
-            size_hint_y: None
-            height: self.texture_size[1]
-            
-        MDTextField:
-            id: username
-            hint_text: "Username"
-            size_hint_x: None
-            width: "300dp"
-            pos_hint: {"center_x": 0.5}
-            mode: "rectangle"
-            
-        MDTextField:
-            id: password
-            hint_text: "Password"
-            password: True
-            size_hint_x: None
-            width: "300dp"
-            pos_hint: {"center_x": 0.5}
-            mode: "rectangle"
-            
-        MDRaisedButton:
-            text: "Login"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.login()
-            
-        MDRaisedButton:
-            text: "Register Student"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.root.current = 'register'
-            
-        MDRaisedButton:
-            text: "Register Teacher"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.root.current = 'register_teacher'
-
-<RegisterScreen>:
-    name: "register"
-    
-    BoxLayout:
-        orientation: "vertical"
-        padding: "20dp"
-        spacing: "20dp"
-        canvas.before:
-            Color:
-                rgba: hex('#87CEEB')
-            Rectangle:
-                pos: self.pos
-                size: self.size
-        
-        MDLabel:
-            text: "Student Registration"
-            halign: "center"
-            font_style: "H4"
-            
-        MDTextField:
-            id: reg_username
-            hint_text: "Username"
-            size_hint_x: None
-            width: "300dp"
-            pos_hint: {"center_x": 0.5}
-            
-        MDTextField:
-            id: reg_password
-            hint_text: "Password"
-            password: True
-            size_hint_x: None
-            width: "300dp"
-            pos_hint: {"center_x": 0.5}
-            
-        MDRaisedButton:
-            text: "Register"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.register_student()
-            
-        MDRaisedButton:
-            text: "Back to Login"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.root.current = 'login'
-
-<TeacherRegistrationScreen>:
-    name: "register_teacher"
-    
-    BoxLayout:
-        orientation: "vertical"
-        padding: "20dp"
-        spacing: "20dp"
-        canvas.before:
-            Color:
-                rgba: hex('#87CEEB')
-            Rectangle:
-                pos: self.pos
-                size: self.size
-        
-        MDLabel:
-            text: "Teacher Registration"
-            halign: "center"
-            font_style: "H4"
-            
-        MDTextField:
-            id: teacher_username
-            hint_text: "Username"
-            size_hint_x: None
-            width: "300dp"
-            pos_hint: {"center_x": 0.5}
-            
-        MDTextField:
-            id: teacher_password
-            hint_text: "Password"
-            password: True
-            size_hint_x: None
-            width: "300dp"
-            pos_hint: {"center_x": 0.5}
-            
-        MDRaisedButton:
-            text: "Register Teacher"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.register_teacher()
-            
-        MDRaisedButton:
-            text: "Back to Login"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.root.current = 'login'
-
-<DashboardScreen>:
-    name: "dashboard"
-    
-    BoxLayout:
-        orientation: "vertical"
-        padding: "20dp"
-        spacing: "20dp"
-        canvas.before:
-            Color:
-                rgba: hex('#87CEEB')
-            Rectangle:
-                pos: self.pos
-                size: self.size
-        
-        MDLabel:
-            id: welcome_label
-            text: "Welcome!"
-            halign: "center"
-            font_style: "H4"
-            
-        MDLabel:
-            id: user_info
-            text: ""
-            halign: "center"
-            font_style: "Subtitle1"
-            
-        MDRaisedButton:
-            text: "Create Class"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.show_create_class_dialog()
-            
-        MDRaisedButton:
-            text: "Open Chat"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.open_chat()
-            
-        MDRaisedButton:
-            text: "Logout"
-            size_hint_x: None
-            width: "200dp"
-            pos_hint: {"center_x": 0.5}
-            on_release: app.logout()
-"""
-
 class LoginScreen(Screen):
-    pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=40, spacing=20)
+        
+        self.username = MDTextField(hint_text="Username", size_hint=(1, None), height=50)
+        self.password = MDTextField(hint_text="Password", password=True, size_hint=(1, None), height=50)
+        
+        login_btn = MDRaisedButton(text="Login", size_hint=(1, None), height=50)
+        login_btn.bind(on_press=self.login)
+        
+        register_btn = MDRaisedButton(text="Register Student", size_hint=(1, None), height=50)
+        register_btn.bind(on_press=self.go_to_register)
+        
+        layout.add_widget(MDLabel(text="Quran App Login", halign="center", font_style="H4"))
+        layout.add_widget(self.username)
+        layout.add_widget(self.password)
+        layout.add_widget(login_btn)
+        layout.add_widget(register_btn)
+        
+        self.add_widget(layout)
+    
+    def login(self, instance):
+        username = self.username.text
+        password = self.password.text
+        
+        if not username or not password:
+            self.show_dialog("Error", "Please enter username and password")
+            return
+        
+        try:
+            payload = {"username": username, "password": password}
+            response = requests.post(f"{BASE_URL}/login", json=payload)
+            
+            if response.status_code == 200:
+                token = response.json()["access_token"]
+                self.show_dialog("Success", "Login successful!")
+                # ذخیره توکن برای درخواست‌های بعدی
+                self.manager.token = token
+            else:
+                self.show_dialog("Error", f"Login failed: {response.json().get('detail', 'Unknown error')}")
+                
+        except Exception as e:
+            self.show_dialog("Error", f"Connection error: {str(e)}")
+    
+    def go_to_register(self, instance):
+        self.manager.current = "register"
+    
+    def show_dialog(self, title, text):
+        dialog = MDDialog(title=title, text=text, size_hint=(0.8, 0.4))
+        dialog.open()
 
 class RegisterScreen(Screen):
-    pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=40, spacing=20)
+        
+        self.username = MDTextField(hint_text="Username", size_hint=(1, None), height=50)
+        self.password = MDTextField(hint_text="Password", password=True, size_hint=(1, None), height=50)
+        self.full_name = MDTextField(hint_text="Full Name", size_hint=(1, None), height=50)
+        self.grade = MDTextField(hint_text="Grade", size_hint=(1, None), height=50)
+        
+        register_btn = MDRaisedButton(text="Register", size_hint=(1, None), height=50)
+        register_btn.bind(on_press=self.register)
+        
+        back_btn = MDRaisedButton(text="Back to Login", size_hint=(1, None), height=50)
+        back_btn.bind(on_press=self.go_to_login)
+        
+        layout.add_widget(MDLabel(text="Student Registration", halign="center", font_style="H4"))
+        layout.add_widget(self.username)
+        layout.add_widget(self.password)
+        layout.add_widget(self.full_name)
+        layout.add_widget(self.grade)
+        layout.add_widget(register_btn)
+        layout.add_widget(back_btn)
+        
+        self.add_widget(layout)
+    
+    def register(self, instance):
+        username = self.username.text
+        password = self.password.text
+        full_name = self.full_name.text
+        grade = self.grade.text
+        
+        if not all([username, password, full_name, grade]):
+            self.show_dialog("Error", "Please fill all fields")
+            return
+        
+        try:
+            payload = {
+                "username": username,
+                "password": password,
+                "full_name": full_name,
+                "grade": grade
+            }
+            response = requests.post(f"{BASE_URL}/register-student", json=payload)
+            
+            if response.status_code == 200:
+                self.show_dialog("Success", "Registration successful!")
+                self.go_to_login(instance)
+            else:
+                error_msg = response.json().get('detail', 'Unknown error')
+                self.show_dialog("Error", f"Registration failed: {error_msg}")
+                
+        except Exception as e:
+            self.show_dialog("Error", f"Connection error: {str(e)}")
+    
+    def go_to_login(self, instance):
+        self.manager.current = "login"
+    
+    def show_dialog(self, title, text):
+        dialog = MDDialog(title=title, text=text, size_hint=(0.8, 0.4))
+        dialog.open()
 
-class TeacherRegistrationScreen(Screen):
-    pass
-
-class DashboardScreen(Screen):
-    pass
-
-class QuranEducationApp(MDApp):
+class QuranApp(MDApp):
     def build(self):
-        self.theme_cls.primary_palette = "Blue"
-        self.theme_cls.theme_style = "Light"
-        self.sm = Builder.load_string(KV)
-        self.user_token = None
-        self.user_data = None
-        return self.sm
-
-    def show_toast(self, message):
-        Clock.schedule_once(lambda dt: toast(message), 0)
-
-    def show_error(self, message, dt=None):
-        self.dialog = MDDialog(title="Error", text=message, size_hint=(0.8, 0.3))
-        self.dialog.open()
-
-    def login(self):
-        screen = self.sm.get_screen('login')
-        username = screen.ids.username.text.strip()
-        password = screen.ids.password.text.strip()
-        
-        if not username or not password:
-            self.show_toast("Please enter username and password")
-            return
-
-        def login_thread():
-            try:
-                headers = {
-                    'accept': 'application/json',
-                    'Content-Type': 'application/json'
-                }
-                
-                response = requests.post(
-                    f"{BASE_URL}/login",
-                    json={"username": username, "password": password},
-                    headers=headers,
-                    timeout=15,
-                    verify=False
-                )
-                
-                print(f"Login Status: {response.status_code}")
-                print(f"Login Response: {response.text}")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    token = data.get("access_token")
-                    if token:
-                        Clock.schedule_once(lambda dt: self.login_success(username, token))
-                    else:
-                        Clock.schedule_once(lambda dt: self.show_error("No token received"))
-                else:
-                    try:
-                        error_msg = response.json().get("detail", "Login failed")
-                    except:
-                        error_msg = f"HTTP Error {response.status_code}"
-                    Clock.schedule_once(lambda dt: self.show_error(error_msg))
-                    
-            except requests.exceptions.RequestException as e:
-                Clock.schedule_once(lambda dt: self.show_error(f"Connection error: {str(e)}"))
-
-        threading.Thread(target=login_thread, daemon=True).start()
-
-    def login_success(self, username, token):
-        self.show_toast("Login successful")
-        self.username = username
-        self.user_token = token
-        
-        def get_user_info():
-            try:
-                headers = {
-                    'accept': 'application/json',
-                    'Authorization': f'Bearer {token}'
-                }
-                
-                response = requests.get(
-                    f"{BASE_URL}/users/me",
-                    headers=headers,
-                    timeout=10,
-                    verify=False
-                )
-                
-                if response.status_code == 200:
-                    self.user_data = response.json()
-                    Clock.schedule_once(lambda dt: self.update_dashboard())
-                else:
-                    print("Failed to get user info")
-                    
-            except Exception as e:
-                print(f"Error getting user info: {e}")
-        
-        threading.Thread(target=get_user_info, daemon=True).start()
-
-    def update_dashboard(self):
-        dashboard = self.sm.get_screen('dashboard')
-        dashboard.ids.welcome_label.text = f"Welcome, {self.username}!"
-        
-        if self.user_data:
-            user_info = (
-                f"Role: {self.user_data.get('role', 'N/A')}\n"
-                f"Approved: {'Yes' if self.user_data.get('approved') else 'No'}"
-            )
-            dashboard.ids.user_info.text = user_info
-        
-        self.sm.current = 'dashboard'
-
-    def register_student(self):
-        screen = self.sm.get_screen('register')
-        username = screen.ids.reg_username.text.strip()
-        password = screen.ids.reg_password.text.strip()
-        
-        if not username or not password:
-            self.show_toast("Please enter username and password")
-            return
-        
-        if len(password) < 6:
-            self.show_toast("Password must be at least 6 characters")
-            return
-
-        def register_thread():
-            try:
-                headers = {
-                    'accept': 'application/json',
-                    'Content-Type': 'application/json'
-                }
-                
-                response = requests.post(
-                    f"{BASE_URL}/register",
-                    json={"username": username, "password": password, "role": "student"},
-                    headers=headers,
-                    timeout=15,
-                    verify=False
-                )
-                
-                print(f"Register Status: {response.status_code}")
-                print(f"Register Response: {response.text}")
-                
-                if response.status_code == 200:
-                    Clock.schedule_once(lambda dt: self.register_success())
-                else:
-                    try:
-                        error_msg = response.json().get("detail", "Registration failed")
-                    except:
-                        error_msg = f"HTTP Error {response.status_code}"
-                    Clock.schedule_once(lambda dt: self.show_error(error_msg))
-                    
-            except requests.exceptions.RequestException as e:
-                Clock.schedule_once(lambda dt: self.show_error(f"Connection error: {str(e)}"))
-
-        threading.Thread(target=register_thread, daemon=True).start()
-
-    def register_teacher(self):
-        screen = self.sm.get_screen('register_teacher')
-        username = screen.ids.teacher_username.text.strip()
-        password = screen.ids.teacher_password.text.strip()
-        
-        if not username or not password:
-            self.show_toast("Please enter username and password")
-            return
-        
-        if len(password) < 6:
-            self.show_toast("Password must be at least 6 characters")
-            return
-
-        def register_thread():
-            try:
-                headers = {
-                    'accept': 'application/json',
-                    'Content-Type': 'application/json'
-                }
-                
-                response = requests.post(
-                    f"{BASE_URL}/register",
-                    json={"username": username, "password": password, "role": "teacher"},
-                    headers=headers,
-                    timeout=15,
-                    verify=False
-                )
-                
-                print(f"Teacher Register Status: {response.status_code}")
-                print(f"Teacher Register Response: {response.text}")
-                
-                if response.status_code == 200:
-                    Clock.schedule_once(lambda dt: self.register_success())
-                else:
-                    try:
-                        error_msg = response.json().get("detail", "Registration failed")
-                    except:
-                        error_msg = f"HTTP Error {response.status_code}"
-                    Clock.schedule_once(lambda dt: self.show_error(error_msg))
-                    
-            except requests.exceptions.RequestException as e:
-                Clock.schedule_once(lambda dt: self.show_error(f"Connection error: {str(e)}"))
-
-        threading.Thread(target=register_thread, daemon=True).start()
-
-    def register_success(self):
-        self.show_toast("Registration successful")
-        self.sm.current = 'login'
-
-    def logout(self):
-        self.sm.current = 'login'
-        self.user_token = None
-        self.user_data = None
-        self.show_toast("Logged out successfully")
-
-    def show_create_class_dialog(self):
-        self.show_toast("Class creation feature coming soon!")
-
-    def open_chat(self):
-        self.show_toast("Chat feature coming soon!")
+        self.theme_cls.primary_palette = "Teal"
+        sm = ScreenManager()
+        sm.add_widget(LoginScreen(name="login"))
+        sm.add_widget(RegisterScreen(name="register"))
+        return sm
 
 if __name__ == "__main__":
-    QuranEducationApp().run()
+    QuranApp().run()
