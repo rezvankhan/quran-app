@@ -33,11 +33,23 @@ def create_tables():
                 )
             """)
             
+            # ایجاد جدول classes
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS classes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    level TEXT NOT NULL,
+                    teacher_id INTEGER,
+                    schedule_time TEXT,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (teacher_id) REFERENCES users (id)
+                )
+            """)
+            
             print("✅ جداول در SQLite ایجاد شدند")
     except Exception as err:
         print(f"❌ خطا در ایجاد جداول: {err}")
 
 if __name__ == "__main__":
     create_tables()
-    create_tables()
-
