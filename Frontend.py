@@ -61,7 +61,7 @@ class LoginScreen(Screen):
             print(f"📤 Sending payload: {payload}")
             print(f"🌐 API URL: {BASE_URL}/login")
             
-            response = requests.post(f"{BASE_URL}/login", json=payload, verify=False)
+            response = requests.post(f"{BASE_URL}/login", json=payload, verify=False, timeout=10)
             
             print(f"📥 Response status code: {response.status_code}")
             print(f"📥 Response content: {response.text}")
@@ -78,6 +78,9 @@ class LoginScreen(Screen):
                 print(f"❌ Login failed: {error_msg}")
                 self.show_dialog("Error", f"Login failed: {error_msg}")
                 
+        except requests.exceptions.Timeout:
+            print("⏰ Request timeout - Server is not responding")
+            self.show_dialog("Error", "Server is not responding. Please try again later.")
         except Exception as e:
             print(f"💥 Exception during login: {str(e)}")
             self.show_dialog("Error", f"Connection error: {str(e)}")
@@ -91,38 +94,6 @@ class LoginScreen(Screen):
     
     def go_to_register_teacher(self, instance):
         self.manager.current = "register_teacher"
-    
-    def show_dialog(self, title, text):
-        dialog = MDDialog(title=title, text=text, size_hint=(0.8, 0.4))
-        dialog.open()
-
-class DashboardScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=40, spacing=20)
-        
-        self.welcome_label = MDLabel(text="Welcome to Quran App!", halign="center", font_style="H4")
-        self.user_label = MDLabel(text="", halign="center", font_style="H6")
-        
-        logout_btn = MDRaisedButton(text="Logout", size_hint=(1, None), height=50)
-        logout_btn.bind(on_press=self.logout)
-        
-        layout.add_widget(self.welcome_label)
-        layout.add_widget(self.user_label)
-        layout.add_widget(logout_btn)
-        
-        self.add_widget(layout)
-    
-    def on_enter(self):
-        if hasattr(self.manager, 'username'):
-            self.user_label.text = f"Logged in as: {self.manager.username}"
-            print(f"📊 Dashboard opened for user: {self.manager.username}")
-    
-    def logout(self, instance):
-        self.manager.token = None
-        self.manager.username = None
-        self.manager.current = "login"
-        self.show_dialog("Success", "Logged out successfully!")
     
     def show_dialog(self, title, text):
         dialog = MDDialog(title=title, text=text, size_hint=(0.8, 0.4))
@@ -175,7 +146,7 @@ class RegisterStudentScreen(Screen):
             }
             print(f"📤 Sending student registration: {payload}")
             
-            response = requests.post(f"{BASE_URL}/register-student", json=payload, verify=False)
+            response = requests.post(f"{BASE_URL}/register-student", json=payload, verify=False, timeout=10)
             
             print(f"📥 Response status: {response.status_code}")
             print(f"📥 Response content: {response.text}")
@@ -188,6 +159,9 @@ class RegisterStudentScreen(Screen):
                 print(f"❌ Registration failed: {error_msg}")
                 self.show_dialog("Error", f"Registration failed: {error_msg}")
                 
+        except requests.exceptions.Timeout:
+            print("⏰ Request timeout - Server is not responding")
+            self.show_dialog("Error", "Server is not responding. Please try again later.")
         except Exception as e:
             print(f"💥 Exception during registration: {str(e)}")
             self.show_dialog("Error", f"Connection error: {str(e)}")
@@ -199,86 +173,4 @@ class RegisterStudentScreen(Screen):
         dialog = MDDialog(title=title, text=text, size_hint=(0.8, 0.4))
         dialog.open()
 
-class RegisterTeacherScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=40, spacing=20)
-        
-        self.username = MDTextField(hint_text="Username", size_hint=(1, None), height=50)
-        self.password = MDTextField(hint_text="Password", password=True, size_hint=(1, None), height=50)
-        self.full_name = MDTextField(hint_text="Full Name", size_hint=(1, None), height=50)
-        self.specialty = MDTextField(hint_text="Specialty", size_hint=(1, None), height=50)
-        
-        register_btn = MDRaisedButton(text="Register Teacher", size_hint=(1, None), height=50)
-        register_btn.bind(on_press=self.register)
-        
-        back_btn = MDRaisedButton(text="Back to Login", size_hint=(1, None), height=50)
-        back_btn.bind(on_press=self.go_to_login)
-        
-        layout.add_widget(MDLabel(text="Teacher Registration", halign="center", font_style="H4"))
-        layout.add_widget(self.username)
-        layout.add_widget(self.password)
-        layout.add_widget(self.full_name)
-        layout.add_widget(self.specialty)
-        layout.add_widget(register_btn)
-        layout.add_widget(back_btn)
-        
-        self.add_widget(layout)
-    
-    def register(self, instance):
-        username = self.username.text
-        password = self.password.text
-        full_name = self.full_name.text
-        specialty = self.specialty.text
-        
-        print(f"👨‍🏫 Attempting teacher registration: {username}")
-        
-        if not all([username, password, full_name, specialty]):
-            self.show_dialog("Error", "Please fill all fields")
-            return
-        
-        try:
-            payload = {
-                "username": username,
-                "password": password,
-                "full_name": full_name,
-                "specialty": specialty
-            }
-            print(f"📤 Sending teacher registration: {payload}")
-            
-            response = requests.post(f"{BASE_URL}/register-teacher", json=payload, verify=False)
-            
-            print(f"📥 Response status: {response.status_code}")
-            print(f"📥 Response content: {response.text}")
-            
-            if response.status_code == 200:
-                self.show_dialog("Success", "Teacher registration successful! Waiting for admin approval.")
-                Clock.schedule_once(lambda dt: self.go_to_login(instance), 1.0)
-            else:
-                error_msg = response.json().get('detail', 'Unknown error')
-                print(f"❌ Registration failed: {error_msg}")
-                self.show_dialog("Error", f"Registration failed: {error_msg}")
-                
-        except Exception as e:
-            print(f"💥 Exception during registration: {str(e)}")
-            self.show_dialog("Error", f"Connection error: {str(e)}")
-    
-    def go_to_login(self, instance):
-        self.manager.current = "login"
-    
-    def show_dialog(self, title, text):
-        dialog = MDDialog(title=title, text=text, size_hint=(0.8, 0.4))
-        dialog.open()
-
-class QuranApp(MDApp):
-    def build(self):
-        self.theme_cls.primary_palette = "Teal"
-        sm = ScreenManager()
-        sm.add_widget(LoginScreen(name="login"))
-        sm.add_widget(DashboardScreen(name="dashboard"))
-        sm.add_widget(RegisterStudentScreen(name="register_student"))
-        sm.add_widget(RegisterTeacherScreen(name="register_teacher"))
-        return sm
-
-if __name__ == "__main__":
-    QuranApp().run()
+# بقیه کد بدون تغییر...
