@@ -50,30 +50,40 @@ class LoginScreen(Screen):
         username = self.username.text
         password = self.password.text
         
+        print(f"🔐 Attempting login with username: {username}")
+        
         if not username or not password:
             self.show_dialog("Error", "Please enter username and password")
             return
         
         try:
             payload = {"username": username, "password": password}
+            print(f"📤 Sending payload: {payload}")
+            print(f"🌐 API URL: {BASE_URL}/login")
+            
             response = requests.post(f"{BASE_URL}/login", json=payload, verify=False)
+            
+            print(f"📥 Response status code: {response.status_code}")
+            print(f"📥 Response content: {response.text}")
             
             if response.status_code == 200:
                 token = response.json()["access_token"]
                 self.manager.token = token
                 self.manager.username = username
-                print(f"Login successful! Token: {token}")
+                print(f"✅ Login successful! Token: {token}")
                 self.show_dialog("Success", "Login successful! Going to dashboard...")
-                # تغییر صفحه با تأخیر
                 Clock.schedule_once(lambda dt: self.go_to_dashboard(), 1.0)
             else:
                 error_msg = response.json().get('detail', 'Unknown error')
+                print(f"❌ Login failed: {error_msg}")
                 self.show_dialog("Error", f"Login failed: {error_msg}")
                 
         except Exception as e:
+            print(f"💥 Exception during login: {str(e)}")
             self.show_dialog("Error", f"Connection error: {str(e)}")
     
     def go_to_dashboard(self):
+        print("🔄 Switching to dashboard screen")
         self.manager.current = "dashboard"
     
     def go_to_register_student(self, instance):
@@ -104,10 +114,9 @@ class DashboardScreen(Screen):
         self.add_widget(layout)
     
     def on_enter(self):
-        # نمایش نام کاربری وقتی صفحه باز می‌شود
         if hasattr(self.manager, 'username'):
             self.user_label.text = f"Logged in as: {self.manager.username}"
-            print(f"Dashboard opened for user: {self.manager.username}")
+            print(f"📊 Dashboard opened for user: {self.manager.username}")
     
     def logout(self, instance):
         self.manager.token = None
@@ -151,6 +160,8 @@ class RegisterStudentScreen(Screen):
         full_name = self.full_name.text
         grade = self.grade.text
         
+        print(f"👤 Attempting student registration: {username}")
+        
         if not all([username, password, full_name, grade]):
             self.show_dialog("Error", "Please fill all fields")
             return
@@ -162,16 +173,23 @@ class RegisterStudentScreen(Screen):
                 "full_name": full_name,
                 "grade": grade
             }
+            print(f"📤 Sending student registration: {payload}")
+            
             response = requests.post(f"{BASE_URL}/register-student", json=payload, verify=False)
+            
+            print(f"📥 Response status: {response.status_code}")
+            print(f"📥 Response content: {response.text}")
             
             if response.status_code == 200:
                 self.show_dialog("Success", "Student registration successful!")
                 Clock.schedule_once(lambda dt: self.go_to_login(instance), 1.0)
             else:
                 error_msg = response.json().get('detail', 'Unknown error')
+                print(f"❌ Registration failed: {error_msg}")
                 self.show_dialog("Error", f"Registration failed: {error_msg}")
                 
         except Exception as e:
+            print(f"💥 Exception during registration: {str(e)}")
             self.show_dialog("Error", f"Connection error: {str(e)}")
     
     def go_to_login(self, instance):
@@ -213,6 +231,8 @@ class RegisterTeacherScreen(Screen):
         full_name = self.full_name.text
         specialty = self.specialty.text
         
+        print(f"👨‍🏫 Attempting teacher registration: {username}")
+        
         if not all([username, password, full_name, specialty]):
             self.show_dialog("Error", "Please fill all fields")
             return
@@ -224,16 +244,23 @@ class RegisterTeacherScreen(Screen):
                 "full_name": full_name,
                 "specialty": specialty
             }
+            print(f"📤 Sending teacher registration: {payload}")
+            
             response = requests.post(f"{BASE_URL}/register-teacher", json=payload, verify=False)
+            
+            print(f"📥 Response status: {response.status_code}")
+            print(f"📥 Response content: {response.text}")
             
             if response.status_code == 200:
                 self.show_dialog("Success", "Teacher registration successful! Waiting for admin approval.")
                 Clock.schedule_once(lambda dt: self.go_to_login(instance), 1.0)
             else:
                 error_msg = response.json().get('detail', 'Unknown error')
+                print(f"❌ Registration failed: {error_msg}")
                 self.show_dialog("Error", f"Registration failed: {error_msg}")
                 
         except Exception as e:
+            print(f"💥 Exception during registration: {str(e)}")
             self.show_dialog("Error", f"Connection error: {str(e)}")
     
     def go_to_login(self, instance):
