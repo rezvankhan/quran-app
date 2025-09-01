@@ -32,6 +32,7 @@ def get_db_connection():
             password TEXT NOT NULL,
             role TEXT DEFAULT 'student',
             full_name TEXT,
+            email TEXT,
             grade TEXT,
             specialty TEXT,
             approved BOOLEAN DEFAULT FALSE,
@@ -63,12 +64,26 @@ class User(BaseModel):
     username: str
     password: str
 
+class StudentRegister(BaseModel):
+    username: str
+    password: str
+    full_name: str
+    email: str = None
+    grade: str = None
+
+class TeacherRegister(BaseModel):
+    username: str
+    password: str
+    full_name: str
+    email: str = None
+    specialty: str = None
+
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    email: str
+    email: str = None
     full_name: str
-    role: str = "student"
+    role: str
 
 class Token(BaseModel):
     access_token: str
@@ -85,7 +100,71 @@ def create_access_token(username: str):
 async def root():
     return {"message": "Quran API is running", "status": "healthy"}
 
-# مسیر ثبت‌نام یکپارچه
+# مسیر ثبت‌نام دانش‌آموز
+@app.post("/register-student", response_model=dict)
+async def register_student(student: StudentRegister):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # بررسی وجود کاربر
+        cursor.execute("SELECT id FROM users WHERE username = ?", (student.username,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        # هش کردن رمز عبور
+        hashed_password = pwd_context.hash(student.password)
+        
+        # ثبت دانش‌آموز جدید
+        cursor.execute(
+            "INSERT INTO users (username, password, role, full_name, email, grade, approved) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (student.username, hashed_password, "student", student.full_name, student.email, student.grade, True)
+        )
+        
+        conn.commit()
+        return {"message": "Student registered successfully", "status": "success"}
+            
+    except Exception as e:
+        logger.error(f"Student registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# مسیر ثبت‌نام معلم
+@app.post("/register-teacher", response_model=dict)
+async def register_teacher(teacher: TeacherRegister):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # بررسی وجود کاربر
+        cursor.execute("SELECT id FROM users WHERE username = ?", (teacher.username,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        # هش کردن رمز عبور
+        hashed_password = pwd_context.hash(teacher.password)
+        
+        # ثبت معلم جدید (نیاز به تایید admin)
+        cursor.execute(
+            "INSERT INTO users (username, password, role, full_name, email, specialty, approved) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (teacher.username, hashed_password, "teacher", teacher.full_name, teacher.email, teacher.specialty, False)
+        )
+        
+        conn.commit()
+        return {"message": "Teacher registered successfully. Waiting for admin approval.", "status": "success"}
+            
+    except Exception as e:
+        logger.error(f"Teacher registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# مسیر ثبت‌نام یکپارچه (برای frontend)
 @app.post("/register", response_model=dict)
 async def register(user: RegisterRequest):
     conn = None
@@ -103,10 +182,17 @@ async def register(user: RegisterRequest):
         
         # ثبت کاربر جدید
         approved = user.role == "student"  # دانش‌آموزان به طور خودکار تایید می‌شوند
-        cursor.execute(
-            "INSERT INTO users (username, password, role, full_name, approved) VALUES (?, ?, ?, ?, ?)",
-            (user.username, hashed_password, user.role, user.full_name, approved)
-        )
+        
+        if user.role == "student":
+            cursor.execute(
+                "INSERT INTO users (username, password, role, full_name, email, approved) VALUES (?, ?, ?, ?, ?, ?)",
+                (user.username, hashed_password, user.role, user.full_name, user.email, approved)
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO users (username, password, role, full_name, email, approved) VALUES (?, ?, ?, ?, ?, ?)",
+                (user.username, hashed_password, user.role, user.full_name, user.email, approved)
+            )
         
         conn.commit()
         
@@ -168,7 +254,7 @@ async def read_users_me(token: str = Depends(lambda: None)):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT id, username, role, full_name, grade, specialty, approved FROM users WHERE username = ?", (username,))
+        cursor.execute("SELECT id, username, role, full_name, email, grade, specialty, approved FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
         
         if not user:
@@ -179,9 +265,10 @@ async def read_users_me(token: str = Depends(lambda: None)):
             "username": user[1],
             "role": user[2],
             "full_name": user[3],
-            "grade": user[4],
-            "specialty": user[5],
-            "approved": user[6]
+            "email": user[4],
+            "grade": user[5],
+            "specialty": user[6],
+            "approved": user[7]
         }
             
     except jwt.ExpiredSignatureError:
@@ -194,3 +281,51 @@ async def read_users_me(token: str = Depends(lambda: None)):
     finally:
         if conn:
             conn.close()
+
+# مسیر دریافت معلمان در انتظار تایید
+@app.get("/pending-teachers")
+async def get_pending_teachers():
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id, username, full_name, email, specialty, created_at FROM users WHERE role = 'teacher' AND approved = FALSE")
+        teachers = cursor.fetchall()
+        
+        return [dict(teacher) for teacher in teachers]
+            
+    except Exception as e:
+        logger.error(f"Pending teachers error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# مسیر تایید معلم
+@app.post("/approve-teacher/{teacher_id}")
+async def approve_teacher(teacher_id: int):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("UPDATE users SET approved = TRUE WHERE id = ? AND role = 'teacher'", (teacher_id,))
+        
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+        
+        conn.commit()
+        return {"message": "Teacher approved successfully", "status": "success"}
+            
+    except Exception as e:
+        logger.error(f"Approve teacher error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# برای اجرای محلی
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
