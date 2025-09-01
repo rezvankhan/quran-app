@@ -23,7 +23,7 @@ class QuranApp(toga.App):
     
     def startup(self):
         # ایجاد پنجره اصلی
-        self.main_window = toga.MainWindow(title=self.formal_name, size=(400, 500))
+        self.main_window = toga.MainWindow(title=self.formal_name, size=(400, 600))
         self.show_login_screen()
         self.main_window.show()
     
@@ -40,12 +40,12 @@ class QuranApp(toga.App):
         # فیلدهای ورودی
         self.username_input = toga.TextInput(
             placeholder="Username",
-            style=Pack(padding=10, width=300, padding_bottom=10)
+            style=Pack(padding=10, flex=1, padding_bottom=10)
         )
         
         self.password_input = toga.PasswordInput(
             placeholder="Password",
-            style=Pack(padding=10, width=300, padding_bottom=20)
+            style=Pack(padding=10, flex=1, padding_bottom=20)
         )
         
         # دکمه‌ها
@@ -105,7 +105,7 @@ class QuranApp(toga.App):
     
     def show_register_student_screen(self):
         self.current_screen = "register_student"
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=40))
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
         
         title_label = toga.Label(
             "Register Student",
@@ -115,27 +115,27 @@ class QuranApp(toga.App):
         # فیلدهای ثبت‌نام دانش‌آموز
         self.student_username = toga.TextInput(
             placeholder="Student Username",
-            style=Pack(padding=10, width=300, padding_bottom=10)
+            style=Pack(padding=10, flex=1, padding_bottom=10)
         )
         
         self.student_password = toga.PasswordInput(
             placeholder="Student Password",
-            style=Pack(padding=10, width=300, padding_bottom=10)
+            style=Pack(padding=10, flex=1, padding_bottom=10)
         )
         
         self.student_email = toga.TextInput(
             placeholder="Email",
-            style=Pack(padding=10, width=300, padding_bottom=10)
+            style=Pack(padding=10, flex=1, padding_bottom=10)
         )
         
         self.student_fullname = toga.TextInput(
             placeholder="Full Name",
-            style=Pack(padding=10, width=300, padding_bottom=20)
+            style=Pack(padding=10, flex=1, padding_bottom=20)
         )
         
         register_btn = toga.Button(
             "Register",
-            on_press=self.register_student,
+            on_press=self.register_student_handler,
             style=Pack(padding=15, background_color="#4CAF50", color="white", padding_bottom=10)
         )
         
@@ -157,7 +157,7 @@ class QuranApp(toga.App):
     
     def show_register_teacher_screen(self):
         self.current_screen = "register_teacher"
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=40))
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
         
         title_label = toga.Label(
             "Register Teacher",
@@ -167,27 +167,27 @@ class QuranApp(toga.App):
         # فیلدهای ثبت‌نام معلم
         self.teacher_username = toga.TextInput(
             placeholder="Teacher Username",
-            style=Pack(padding=10, width=300, padding_bottom=10)
+            style=Pack(padding=10, flex=1, padding_bottom=10)
         )
         
         self.teacher_password = toga.PasswordInput(
             placeholder="Teacher Password",
-            style=Pack(padding=10, width=300, padding_bottom=10)
+            style=Pack(padding=10, flex=1, padding_bottom=10)
         )
         
         self.teacher_email = toga.TextInput(
             placeholder="Email",
-            style=Pack(padding=10, width=300, padding_bottom=10)
+            style=Pack(padding=10, flex=1, padding_bottom=10)
         )
         
         self.teacher_fullname = toga.TextInput(
             placeholder="Full Name",
-            style=Pack(padding=10, width=300, padding_bottom=20)
+            style=Pack(padding=10, flex=1, padding_bottom=20)
         )
         
         register_btn = toga.Button(
             "Register",
-            on_press=self.register_teacher,
+            on_press=self.register_teacher_handler,
             style=Pack(padding=15, background_color="#4CAF50", color="white", padding_bottom=10)
         )
         
@@ -209,16 +209,22 @@ class QuranApp(toga.App):
     
     def login_handler(self, widget):
         # استفاده از asyncio برای اجرای تابع async
-        asyncio.create_task(self.login(widget))
+        asyncio.create_task(self.login())
     
-    async def login(self, widget):
+    def register_student_handler(self, widget):
+        asyncio.create_task(self.register_student())
+    
+    def register_teacher_handler(self, widget):
+        asyncio.create_task(self.register_teacher())
+    
+    async def login(self):
         username = self.username_input.value.strip()
         password = self.password_input.value.strip()
         
         print(f"🔐 Attempting login with username: {username}")
         
         if not username or not password:
-            self.show_message("Error", "Please enter username and password")
+            self.show_error("Error", "Please enter username and password")
             return
         
         try:
@@ -238,36 +244,36 @@ class QuranApp(toga.App):
                         self.token = token
                         self.username = username
                         print(f"✅ Login successful! Token: {token}")
-                        self.show_message("Success", "Login successful!")
+                        self.show_info("Success", "Login successful!")
                         self.show_dashboard_screen()
                     else:
-                        self.show_message("Error", "No access token received")
+                        self.show_error("Error", "No access token received")
                 except json.JSONDecodeError:
-                    self.show_message("Error", "Invalid response from server")
+                    self.show_error("Error", "Invalid JSON response from server")
             else:
                 try:
                     error_msg = response.json().get('detail', 'Unknown error')
                     print(f"❌ Login failed: {error_msg}")
-                    self.show_message("Error", f"Login failed: {error_msg}")
+                    self.show_error("Error", f"Login failed: {error_msg}")
                 except json.JSONDecodeError:
-                    self.show_message("Error", f"Server error: {response.status_code}")
+                    self.show_error("Error", f"Server error: {response.status_code} - {response.text}")
                 
         except requests.exceptions.ConnectionError:
-            self.show_message("Error", "Connection error: Cannot connect to server")
+            self.show_error("Error", "Connection error: Cannot connect to server")
         except requests.exceptions.Timeout:
-            self.show_message("Error", "Connection timeout: Server took too long to respond")
+            self.show_error("Error", "Connection timeout: Server took too long to respond")
         except Exception as e:
             print(f"💥 Exception during login: {str(e)}")
-            self.show_message("Error", f"Unexpected error: {str(e)}")
+            self.show_error("Error", f"Unexpected error: {str(e)}")
     
-    async def register_student(self, widget):
+    async def register_student(self):
         username = self.student_username.value.strip()
         password = self.student_password.value.strip()
         email = self.student_email.value.strip()
         fullname = self.student_fullname.value.strip()
         
         if not all([username, password, email, fullname]):
-            self.show_message("Error", "Please fill all fields")
+            self.show_error("Error", "Please fill all fields")
             return
         
         try:
@@ -279,26 +285,43 @@ class QuranApp(toga.App):
                 "role": "student"
             }
             
+            print(f"📤 Registering student: {payload}")
             response = requests.post(f"{BASE_URL}/register", json=payload, verify=False, timeout=30)
             
+            print(f"📥 Response status: {response.status_code}")
+            print(f"📥 Response text: {response.text}")
+            
             if response.status_code == 200:
-                self.show_message("Success", "Student registered successfully!")
+                self.show_info("Success", "Student registered successfully!")
                 self.show_login_screen()
             else:
-                error_msg = response.json().get('detail', 'Registration failed')
-                self.show_message("Error", f"Registration failed: {error_msg}")
+                # بررسی اگر پاسخ JSON نیست
+                if response.text.strip():
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get('detail', 'Registration failed')
+                    except json.JSONDecodeError:
+                        error_msg = response.text
+                else:
+                    error_msg = "Registration failed - Empty response from server"
                 
+                self.show_error("Error", f"Registration failed: {error_msg}")
+                
+        except requests.exceptions.ConnectionError:
+            self.show_error("Error", "Cannot connect to server")
+        except requests.exceptions.Timeout:
+            self.show_error("Error", "Server timeout")
         except Exception as e:
-            self.show_message("Error", f"Registration error: {str(e)}")
+            self.show_error("Error", f"Registration error: {str(e)}")
     
-    async def register_teacher(self, widget):
+    async def register_teacher(self):
         username = self.teacher_username.value.strip()
         password = self.teacher_password.value.strip()
         email = self.teacher_email.value.strip()
         fullname = self.teacher_fullname.value.strip()
         
         if not all([username, password, email, fullname]):
-            self.show_message("Error", "Please fill all fields")
+            self.show_error("Error", "Please fill all fields")
             return
         
         try:
@@ -310,17 +333,34 @@ class QuranApp(toga.App):
                 "role": "teacher"
             }
             
+            print(f"📤 Registering teacher: {payload}")
             response = requests.post(f"{BASE_URL}/register", json=payload, verify=False, timeout=30)
             
+            print(f"📥 Response status: {response.status_code}")
+            print(f"📥 Response text: {response.text}")
+            
             if response.status_code == 200:
-                self.show_message("Success", "Teacher registered successfully!")
+                self.show_info("Success", "Teacher registered successfully!")
                 self.show_login_screen()
             else:
-                error_msg = response.json().get('detail', 'Registration failed')
-                self.show_message("Error", f"Registration failed: {error_msg}")
+                # بررسی اگر پاسخ JSON نیست
+                if response.text.strip():
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get('detail', 'Registration failed')
+                    except json.JSONDecodeError:
+                        error_msg = response.text
+                else:
+                    error_msg = "Registration failed - Empty response from server"
                 
+                self.show_error("Error", f"Registration failed: {error_msg}")
+                
+        except requests.exceptions.ConnectionError:
+            self.show_error("Error", "Cannot connect to server")
+        except requests.exceptions.Timeout:
+            self.show_error("Error", "Server timeout")
         except Exception as e:
-            self.show_message("Error", f"Registration error: {str(e)}")
+            self.show_error("Error", f"Registration error: {str(e)}")
     
     def go_to_register_student(self, widget):
         print("🔄 Going to student registration")
@@ -335,24 +375,19 @@ class QuranApp(toga.App):
         self.token = None
         self.username = None
         self.show_login_screen()
-        self.show_message("Success", "Logged out successfully!")
+        self.show_info("Success", "Logged out successfully!")
     
-    def show_message(self, title, message):
-        # استفاده از dialog به جای متدهای deprecated
-        if title.lower() == "error":
-            self.main_window.dialog = toga.Dialog(
-                title=title,
-                message=message,
-                buttons=["OK"]
-            )
-            self.main_window.dialog.show()
-        else:
-            self.main_window.dialog = toga.Dialog(
-                title=title,
-                message=message,
-                buttons=["OK"]
-            )
-            self.main_window.dialog.show()
+    def show_error(self, title, message):
+        """نمایش پیغام خطا"""
+        async def show_dialog():
+            await self.main_window.error_dialog(title, message)
+        asyncio.create_task(show_dialog())
+    
+    def show_info(self, title, message):
+        """نمایش پیغام اطلاعات"""
+        async def show_dialog():
+            await self.main_window.info_dialog(title, message)
+        asyncio.create_task(show_dialog())
 
 def main():
     return QuranApp()
