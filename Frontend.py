@@ -9,6 +9,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 ssl._create_default_https_context = ssl._create_unverified_context
 
+# URL پایه API
 BASE_URL = "https://quran-app-kw38.onrender.com"
 
 class QuranApp(toga.App):
@@ -16,22 +17,17 @@ class QuranApp(toga.App):
         super().__init__('Quran App', 'com.quran.app')
         self.token = None
         self.username = None
+        self.current_screen = "login"
     
     def startup(self):
-        # ایجاد صفحه اصلی
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=40))
-        
-        # ایجاد محتوای صفحه لاگین
-        self.create_login_screen(main_box)
-        
         # ایجاد پنجره اصلی
         self.main_window = toga.MainWindow(title=self.formal_name, size=(400, 500))
-        self.main_window.content = main_box
+        self.show_login_screen()
         self.main_window.show()
     
-    def create_login_screen(self, container):
-        # پاک کردن محتوای قبلی
-        container.children.clear()
+    def show_login_screen(self):
+        self.current_screen = "login"
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=40))
         
         # عنوان
         title_label = toga.Label(
@@ -59,39 +55,81 @@ class QuranApp(toga.App):
         
         register_student_btn = toga.Button(
             "Register Student",
-            on_press=self.register_student,
+            on_press=self.go_to_register_student,
             style=Pack(padding=15, background_color="#2196F3", color="white", padding_bottom=10)
         )
         
         register_teacher_btn = toga.Button(
             "Register Teacher",
-            on_press=self.register_teacher,
+            on_press=self.go_to_register_teacher,
             style=Pack(padding=15, background_color="#FF9800", color="white")
         )
         
-        # اضافه کردن ویجت‌ها به صفحه
-        container.add(title_label)
-        container.add(self.username_input)
-        container.add(self.password_input)
-        container.add(login_btn)
-        container.add(register_student_btn)
-        container.add(register_teacher_btn)
+        # اضافه کردن ویجت‌ها
+        main_box.add(title_label)
+        main_box.add(self.username_input)
+        main_box.add(self.password_input)
+        main_box.add(login_btn)
+        main_box.add(register_student_btn)
+        main_box.add(register_teacher_btn)
+        
+        self.main_window.content = main_box
+    
+    def show_dashboard_screen(self):
+        self.current_screen = "dashboard"
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=40))
+        
+        title_label = toga.Label(
+            f"Welcome, {self.username}!",
+            style=Pack(text_align="center", font_size=20, font_weight="bold", padding_bottom=20)
+        )
+        
+        user_info = toga.Label(
+            "You are successfully logged in",
+            style=Pack(text_align="center", font_size=14, padding_bottom=30)
+        )
+        
+        logout_btn = toga.Button(
+            "Logout",
+            on_press=self.logout,
+            style=Pack(padding=15, background_color="#f44336", color="white")
+        )
+        
+        main_box.add(title_label)
+        main_box.add(user_info)
+        main_box.add(logout_btn)
+        
+        self.main_window.content = main_box
+    
+    def show_register_student_screen(self):
+        self.current_screen = "register_student"
+        # پیاده‌سازی صفحه ثبت‌نام دانش‌آموز
+        self.show_message("Info", "Student registration screen will be implemented")
+        self.show_login_screen()
+    
+    def show_register_teacher_screen(self):
+        self.current_screen = "register_teacher"
+        # پیاده‌سازی صفحه ثبت‌نام معلم
+        self.show_message("Info", "Teacher registration screen will be implemented")
+        self.show_login_screen()
     
     async def login(self, widget):
         username = self.username_input.value.strip()
         password = self.password_input.value.strip()
         
+        print(f"🔐 Attempting login with username: {username}")
+        
         if not username or not password:
-            self.main_window.error_dialog("Error", "Please enter username and password")
+            self.show_message("Error", "Please enter username and password")
             return
         
         try:
             payload = {"username": username, "password": password}
-            print(f"📤 Sending login request: {payload}")
+            print(f"📤 Sending payload: {payload}")
             
-            response = requests.post(f"{BASE_URL}/login", json=payload, verify=False, timeout=10)
+            response = requests.post(f"{BASE_URL}/login", json=payload, verify=False, timeout=30)
             
-            print(f"📥 Response status: {response.status_code}")
+            print(f"📥 Response status code: {response.status_code}")
             print(f"📥 Response content: {response.text}")
             
             if response.status_code == 200:
@@ -99,79 +137,37 @@ class QuranApp(toga.App):
                 self.token = token
                 self.username = username
                 print(f"✅ Login successful! Token: {token}")
-                self.main_window.info_dialog("Success", "Login successful!")
+                self.show_message("Success", "Login successful! Going to dashboard...")
+                self.show_dashboard_screen()
             else:
                 error_msg = response.json().get('detail', 'Unknown error')
                 print(f"❌ Login failed: {error_msg}")
-                self.main_window.error_dialog("Error", f"Login failed: {error_msg}")
+                self.show_message("Error", f"Login failed: {error_msg}")
                 
         except Exception as e:
             print(f"💥 Exception during login: {str(e)}")
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+            self.show_message("Error", f"Connection error: {str(e)}")
     
-    async def register_student(self, widget):
-        username = self.username_input.value.strip()
-        password = self.password_input.value.strip()
-        
-        if not username or not password:
-            self.main_window.error_dialog("Error", "Please enter username and password")
-            return
-        
-        try:
-            payload = {
-                "username": username,
-                "password": password,
-                "full_name": f"Student {username}",
-                "grade": "10"
-            }
-            print(f"📤 Sending student registration: {payload}")
-            
-            response = requests.post(f"{BASE_URL}/register-student", json=payload, verify=False, timeout=10)
-            
-            print(f"📥 Response status: {response.status_code}")
-            print(f"📥 Response content: {response.text}")
-            
-            if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Student registration successful!")
-            else:
-                error_msg = response.json().get('detail', 'Unknown error')
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
-                
-        except Exception as e:
-            print(f"💥 Exception during registration: {str(e)}")
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+    def go_to_register_student(self, widget):
+        print("🔄 Going to student registration")
+        self.show_register_student_screen()
     
-    async def register_teacher(self, widget):
-        username = self.username_input.value.strip()
-        password = self.password_input.value.strip()
-        
-        if not username or not password:
-            self.main_window.error_dialog("Error", "Please enter username and password")
-            return
-        
-        try:
-            payload = {
-                "username": username,
-                "password": password,
-                "full_name": f"Teacher {username}",
-                "specialty": "Quran"
-            }
-            print(f"📤 Sending teacher registration: {payload}")
-            
-            response = requests.post(f"{BASE_URL}/register-teacher", json=payload, verify=False, timeout=10)
-            
-            print(f"📥 Response status: {response.status_code}")
-            print(f"📥 Response content: {response.text}")
-            
-            if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Teacher registration successful! Waiting for admin approval.")
-            else:
-                error_msg = response.json().get('detail', 'Unknown error')
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
-                
-        except Exception as e:
-            print(f"💥 Exception during registration: {str(e)}")
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+    def go_to_register_teacher(self, widget):
+        print("🔄 Going to teacher registration")
+        self.show_register_teacher_screen()
+    
+    def logout(self, widget):
+        print("🚪 Logging out")
+        self.token = None
+        self.username = None
+        self.show_login_screen()
+        self.show_message("Success", "Logged out successfully!")
+    
+    def show_message(self, title, message):
+        if title.lower() == "error":
+            self.main_window.error_dialog(title, message)
+        else:
+            self.main_window.info_dialog(title, message)
 
 def main():
     return QuranApp()
