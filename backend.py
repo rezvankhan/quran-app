@@ -100,6 +100,28 @@ def create_access_token(username: str):
 async def root():
     return {"message": "Quran API is running", "status": "healthy"}
 
+# مسیر ریست دیتابیس (برای توسعه)
+@app.post("/reset-db")
+async def reset_database():
+    try:
+        import os
+        db_path = os.path.join(os.path.dirname(__file__), 'quran_db.sqlite3')
+        
+        # پاک کردن دیتابیس موجود
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            logger.info("Old database deleted")
+        
+        # ایجاد دیتابیس جدید
+        conn = get_db_connection()
+        conn.close()
+        
+        return {"message": "Database reset successfully", "status": "success"}
+        
+    except Exception as e:
+        logger.error(f"Reset error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Reset error: {str(e)}")
+
 # مسیر ثبت‌نام دانش‌آموز
 @app.post("/register-student", response_model=dict)
 async def register_student(student: StudentRegister):
