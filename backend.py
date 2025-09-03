@@ -1,194 +1,353 @@
-import toga
-from toga.style import Pack
-from toga.style.pack import COLUMN
-import requests
-import ssl
-import urllib3
-import json
-import asyncio
-import warnings
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from passlib.context import CryptContext
+from datetime import datetime, timedelta
+from jose import jwt
+from dotenv import load_dotenv
+import os
+import sqlite3
+import logging
 
-# غیرفعال کردن هشدارها
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-ssl._create_default_https_context = ssl._create_unverified_context
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+# تنظیمات logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# URL پایه API - با قابلیت تشخیص خودکار
-class APIClient:
-    def __init__(self):
-        self.base_urls = [
-            "https://quran-global-api.onrender.com",
-            "https://quran-app-kw38.onrender.com",
-            "http://localhost:8000"  # برای توسعه محلی
-        ]
-        self.current_base_url = None
-        self.detect_base_url()
-    
-    def detect_base_url(self):
-        """تشخیص خودکار آدرس سرور"""
-        for url in self.base_urls:
-            try:
-                print(f"🔍 Testing API URL: {url}")
-                response = requests.get(f"{url}/", timeout=5, verify=False)
-                if response.status_code == 200:
-                    self.current_base_url = url
-                    print(f"✅ Found active API: {url}")
-                    return
-            except:
-                continue
-        
-        print("❌ No active API server found!")
-        self.current_base_url = self.base_urls[0]  # fallback به اولین آدرس
-    
-    def get_base_url(self):
-        return self.current_base_url
+# برای توسعه محلی
+load_dotenv()
 
-# ایجاد کلient API
-api_client = APIClient()
-BASE_URL = api_client.get_base_url()
+# تنظیمات دیتابیس - سازگار با Render
+def get_db_connection():
+    # استفاده از path مطلق برای Render
+    db_path = os.path.join(os.path.dirname(__file__), 'quran_db.sqlite3')
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    
+    # ایجاد خودکار جدول اگر وجود ندارد
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'student',
+            full_name TEXT,
+            email TEXT,
+            grade TEXT,
+            specialty TEXT,
+            approved BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    conn.commit()
+    return conn
 
-class QuranApp(toga.App):
-    def __init__(self):
-        super().__init__('Quran App', 'com.quran.app')
-        self.token = None
-        self.username = None
-        self.current_screen = "login"
-    
-    def startup(self):
-        self.main_window = toga.MainWindow(title=self.formal_name, size=(400, 600))
-        self.show_login_screen()
-        self.main_window.show()
-    
-    def show_login_screen(self):
-        self.current_screen = "login"
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=40))
+app = FastAPI(title="Quran API", version="1.0.0")
+
+# تنظیمات CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# رمزنگاری پسورد
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+JWT_SECRET = os.getenv("JWT_SECRET", "fallback-secret-key-change-in-production")
+ALGORITHM = "HS256"
+
+# مدل‌های ورودی
+class User(BaseModel):
+    username: str
+    password: str
+
+class StudentRegister(BaseModel):
+    username: str
+    password: str
+    full_name: str
+    email: str = None
+    grade: str = None
+
+class TeacherRegister(BaseModel):
+    username: str
+    password: str
+    full_name: str
+    email: str = None
+    specialty: str = None
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    email: str = None
+    full_name: str
+    role: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+# تابع ایجاد توکن
+def create_access_token(username: str):
+    expire = datetime.utcnow() + timedelta(days=30)
+    to_encode = {"sub": username, "exp": expire}
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=ALGORITHM)
+
+# مسیر سلامت سرور
+@app.get("/")
+async def root():
+    return {"message": "Quran API is running", "status": "healthy"}
+
+# مسیر ریست دیتابیس (برای توسعه)
+@app.post("/reset-db")
+async def reset_database():
+    try:
+        import os
+        db_path = os.path.join(os.path.dirname(__file__), 'quran_db.sqlite3')
         
-        title_label = toga.Label(
-            "Quran App Login",
-            style=Pack(text_align="center", font_size=20, font_weight="bold", padding_bottom=20)
+        # پاک کردن دیتابیس موجود
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            logger.info("Old database deleted")
+        
+        # ایجاد دیتابیس جدید
+        conn = get_db_connection()
+        conn.close()
+        
+        return {"message": "Database reset successfully", "status": "success"}
+        
+    except Exception as e:
+        logger.error(f"Reset error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Reset error: {str(e)}")
+
+# مسیر ثبت‌نام دانش‌آموز
+@app.post("/register-student", response_model=dict)
+async def register_student(student: StudentRegister):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # بررسی وجود کاربر
+        cursor.execute("SELECT id FROM users WHERE username = ?", (student.username,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        # هش کردن رمز عبور
+        hashed_password = pwd_context.hash(student.password)
+        
+        # ثبت دانش‌آموز جدید
+        cursor.execute(
+            "INSERT INTO users (username, password, role, full_name, email, grade, approved) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (student.username, hashed_password, "student", student.full_name, student.email, student.grade, True)
         )
         
-        # اضافه کردن نمایش آدرس API
-        api_label = toga.Label(
-            f"API: {BASE_URL}",
-            style=Pack(text_align="center", font_size=10, color="gray", padding_bottom=10)
-        )
-        
-        self.username_input = toga.TextInput(
-            placeholder="Username",
-            style=Pack(padding=10, flex=1, padding_bottom=10)
-        )
-        
-        self.password_input = toga.PasswordInput(
-            placeholder="Password",
-            style=Pack(padding=10, flex=1, padding_bottom=20)
-        )
-        
-        login_btn = toga.Button(
-            "Login",
-            on_press=self.login_handler,
-            style=Pack(padding=15, background_color="#4CAF50", color="white", padding_bottom=10)
-        )
-        
-        register_student_btn = toga.Button(
-            "Register Student",
-            on_press=self.go_to_register_student,
-            style=Pack(padding=15, background_color="#2196F3", color="white", padding_bottom=10)
-        )
-        
-        register_teacher_btn = toga.Button(
-            "Register Teacher",
-            on_press=self.go_to_register_teacher,
-            style=Pack(padding=15, background_color="#FF9800", color="white")
-        )
-        
-        main_box.add(title_label)
-        main_box.add(api_label)  # اضافه کردن نمایش آدرس API
-        main_box.add(self.username_input)
-        main_box.add(self.password_input)
-        main_box.add(login_btn)
-        main_box.add(register_student_btn)
-        main_box.add(register_teacher_btn)
-        
-        self.main_window.content = main_box
-    
-    # بقیه متدها بدون تغییر...
-    
-    async def register_student(self):
-        username = self.student_username.value.strip()
-        password = self.student_password.value.strip()
-        email = self.student_email.value.strip()
-        fullname = self.student_fullname.value.strip()
-        
-        if not all([username, password, fullname]):
-            self.show_error("Error", "Please fill all required fields (username, password, full name)")
-            return
-        
-        try:
-            payload = {
-                "username": username,
-                "password": password,
-                "full_name": fullname,
-                "email": email,
-                "grade": "General"
-            }
+        conn.commit()
+        return {"message": "Student registered successfully", "status": "success"}
             
-            print(f"📤 Registering student: {payload}")
-            print(f"📤 Sending to: {BASE_URL}/register-student")
-            
-            # تست سلامت سرور قبل از ارسال
-            try:
-                health_check = requests.get(f"{BASE_URL}/", timeout=5, verify=False)
-                print(f"🏥 Server health: {health_check.status_code}")
-            except Exception as e:
-                print(f"❌ Server health check failed: {e}")
-                self.show_error("Error", f"Cannot connect to server: {e}")
-                return
-            
-            response = requests.post(f"{BASE_URL}/register-student", json=payload, verify=False, timeout=30)
-            
-            print(f"📥 Response status: {response.status_code}")
-            print(f"📥 Response text: {response.text}")
-            
-            if response.status_code == 200:
-                try:
-                    response_data = response.json()
-                    message = response_data.get('message', 'Registration successful')
-                    self.show_info("Success", message)
-                    self.show_login_screen()
-                except json.JSONDecodeError:
-                    self.show_info("Success", "Registration successful!")
-                    self.show_login_screen()
-            else:
-                error_msg = self.parse_error(response)
-                self.show_error("Error", f"Registration failed: {error_msg}")
-                
-        except requests.exceptions.ConnectionError:
-            self.show_error("Error", "Cannot connect to server. Please check the API URL.")
-        except requests.exceptions.Timeout:
-            self.show_error("Error", "Server timeout")
-        except Exception as e:
-            print(f"💥 Exception during registration: {str(e)}")
-            self.show_error("Error", f"Registration error: {str(e)}")
-    
-    def parse_error(self, response):
-        """پارس کردن خطا از response"""
-        try:
-            if response.text.strip():
-                error_data = response.json()
-                return error_data.get('detail', response.text)
-            else:
-                return f"Server returned {response.status_code}"
-        except:
-            return response.text if response.text else f"Server returned {response.status_code}"
-    
-    # بقیه متدها بدون تغییر...
+    except Exception as e:
+        logger.error(f"Student registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
-def main():
-    return QuranApp()
+# مسیر ثبت‌نام معلم
+@app.post("/register-teacher", response_model=dict)
+async def register_teacher(teacher: TeacherRegister):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # بررسی وجود کاربر
+        cursor.execute("SELECT id FROM users WHERE username = ?", (teacher.username,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Username already exists")
 
+        # هش کردن رمز عبور
+        hashed_password = pwd_context.hash(teacher.password)
+        
+        # ثبت معلم جدید (نیاز به تایید admin)
+        cursor.execute(
+            "INSERT INTO users (username, password, role, full_name, email, specialty, approved) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (teacher.username, hashed_password, "teacher", teacher.full_name, teacher.email, teacher.specialty, False)
+        )
+        
+        conn.commit()
+        return {"message": "Teacher registered successfully. Waiting for admin approval.", "status": "success"}
+            
+    except Exception as e:
+        logger.error(f"Teacher registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# مسیر ثبت‌نام یکپارچه (برای frontend)
+@app.post("/register", response_model=dict)
+async def register(user: RegisterRequest):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # بررسی وجود کاربر
+        cursor.execute("SELECT id FROM users WHERE username = ?", (user.username,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        # هش کردن رمز عبور
+        hashed_password = pwd_context.hash(user.password)
+        
+        # ثبت کاربر جدید
+        approved = user.role == "student"  # دانش‌آموزان به طور خودکار تایید می‌شوند
+        
+        if user.role == "student":
+            cursor.execute(
+                "INSERT INTO users (username, password, role, full_name, email, approved) VALUES (?, ?, ?, ?, ?, ?)",
+                (user.username, hashed_password, user.role, user.full_name, user.email, approved)
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO users (username, password, role, full_name, email, approved) VALUES (?, ?, ?, ?, ?, ?)",
+                (user.username, hashed_password, user.role, user.full_name, user.email, approved)
+            )
+        
+        conn.commit()
+        
+        message = "Registration successful"
+        if user.role == "teacher":
+            message += ". Waiting for admin approval."
+            
+        return {"message": message, "status": "success"}
+            
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# مسیر ورود
+@app.post("/login", response_model=Token)
+async def login(user: User):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # پیدا کردن کاربر
+        cursor.execute("SELECT * FROM users WHERE username = ?", (user.username,))
+        db_user = cursor.fetchone()
+
+        if not db_user or not pwd_context.verify(user.password, db_user["password"]):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        # بررسی تایید حساب معلم
+        if db_user["role"] == "teacher" and not db_user["approved"]:
+            raise HTTPException(status_code=401, detail="Teacher account not approved yet")
+
+        # ایجاد توکن
+        access_token = create_access_token(user.username)
+        
+        return {"access_token": access_token, "token_type": "bearer"}
+            
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# مسیر دریافت اطلاعات کاربر
+@app.get("/users/me")
+async def read_users_me(token: str = Depends(lambda: None)):
+    conn = None
+    try:
+        if not token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id, username, role, full_name, email, grade, specialty, approved FROM users WHERE username = ?", (username,))
+        user = cursor.fetchone()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        return {
+            "id": user[0],
+            "username": user[1],
+            "role": user[2],
+            "full_name": user[3],
+            "email": user[4],
+            "grade": user[5],
+            "specialty": user[6],
+            "approved": user[7]
+        }
+            
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        logger.error(f"User me error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# مسیر دریافت معلمان در انتظار تایید
+@app.get("/pending-teachers")
+async def get_pending_teachers():
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id, username, full_name, email, specialty, created_at FROM users WHERE role = 'teacher' AND approved = FALSE")
+        teachers = cursor.fetchall()
+        
+        return [dict(teacher) for teacher in teachers]
+            
+    except Exception as e:
+        logger.error(f"Pending teachers error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# مسیر تایید معلم
+@app.post("/approve-teacher/{teacher_id}")
+async def approve_teacher(teacher_id: int):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("UPDATE users SET approved = TRUE WHERE id = ? AND role = 'teacher'", (teacher_id,))
+        
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+        
+        conn.commit()
+        return {"message": "Teacher approved successfully", "status": "success"}
+            
+    except Exception as e:
+        logger.error(f"Approve teacher error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# برای اجرای محلی
 if __name__ == "__main__":
-    print("🚀 Starting Quran App...")
-    print(f"🌐 Using API: {BASE_URL}")
-    app = main()
-    app.main_loop()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
