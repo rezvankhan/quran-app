@@ -18,7 +18,6 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 class APIClient:
     def __init__(self):
         self.base_urls = [
-            "https://quran-global-api.onrender.com",
             "https://quran-app-kw38.onrender.com",
             "http://localhost:8000"
         ]
