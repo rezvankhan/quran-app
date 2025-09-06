@@ -1,3 +1,4 @@
+# backend.py - کامل و اصلاح شده
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -28,7 +29,6 @@ def get_sqlite_connection():
 # تابع اصلی اتصال به دیتابیس
 def get_db_connection():
     if is_render():
-        # استفاده از PostgreSQL در Render
         try:
             import psycopg2
             from psycopg2.extras import RealDictCursor
@@ -48,7 +48,6 @@ def get_db_connection():
             logger.warning("PostgreSQL not available, falling back to SQLite")
             return get_sqlite_connection()
     else:
-        # استفاده از SQLite در local
         return get_sqlite_connection()
 
 # مدل‌های داده
@@ -75,20 +74,6 @@ class ClassCreate(BaseModel):
     level: str
     schedule: str
     max_students: int
-
-class LessonCreate(BaseModel):
-    class_id: int
-    title: str
-    content: str
-    order_index: int
-
-class UserResponse(BaseModel):
-    id: int
-    username: str
-    full_name: str
-    email: str
-    role: str
-    approved: bool
 
 # تابع hash کردن password
 def hash_password(password: str) -> str:
@@ -127,71 +112,6 @@ def init_db():
             )
         """)
         
-        # جدول teachers
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS teachers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                experience TEXT,
-                bio TEXT,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        """)
-        
-        # جدول classes
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS classes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                teacher_id INTEGER,
-                title TEXT NOT NULL,
-                description TEXT,
-                level TEXT,
-                schedule TEXT,
-                max_students INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (teacher_id) REFERENCES users (id)
-            )
-        """)
-        
-        # جدول lessons
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS lessons (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                class_id INTEGER,
-                title TEXT NOT NULL,
-                content TEXT,
-                order_index INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (class_id) REFERENCES classes (id)
-            )
-        """)
-        
-        # جدول enrollments
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS enrollments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_id INTEGER,
-                class_id INTEGER,
-                enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(student_id, class_id),
-                FOREIGN KEY (student_id) REFERENCES users (id),
-                FOREIGN KEY (class_id) REFERENCES classes (id)
-            )
-        """)
-        
-        # جدول progress
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS student_progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_id INTEGER,
-                lesson_id INTEGER,
-                completed BOOLEAN DEFAULT FALSE,
-                completed_at TIMESTAMP,
-                FOREIGN KEY (student_id) REFERENCES users (id),
-                FOREIGN KEY (lesson_id) REFERENCES lessons (id)
-            )
-        """)
-        
         conn.commit()
         conn.close()
         logger.info("Database tables created successfully")
@@ -202,11 +122,9 @@ def init_db():
 # Lifespan handler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     init_db()
     logger.info("Application startup complete")
     yield
-    # Shutdown
     logger.info("Application shutdown")
 
 app = FastAPI(
@@ -230,7 +148,6 @@ async def root():
     return {
         "message": "Quran App API is running",
         "environment": "Render" if is_render() else "Local",
-        "database": "PostgreSQL" if is_render() and 'DATABASE_URL' in os.environ else "SQLite",
         "timestamp": datetime.now().isoformat()
     }
 
@@ -303,8 +220,8 @@ async def register_teacher(teacher: TeacherRegister):
         user_id = cursor.lastrowid
         
         cursor.execute(
-            "INSERT INTO teachers (user_id) VALUES (?)",
-            (user_id,)
+            "INSERT INTO students (user_id, level) VALUES (?, ?)",
+            (user_id, 'teacher')
         )
         
         conn.commit()
@@ -355,48 +272,40 @@ async def login(login_data: LoginRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/students")
-async def get_students():
+@app.get("/users")
+async def get_users():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT u.id, u.full_name, u.email, u.approved, s.level, s.progress
-            FROM users u
-            JOIN students s ON u.id = s.user_id
-            WHERE u.role = 'student'
-        """)
-        
-        students = cursor.fetchall()
+        cursor.execute("SELECT * FROM users")
+        users = cursor.fetchall()
         conn.close()
         
-        return {"students": [dict(student) for student in students]}
+        return {"users": [dict(user) for user in users]}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/teachers")
-async def get_teachers():
+@app.get("/user/{user_id}")
+async def get_user(user_id: int):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT u.id, u.full_name, u.email, u.specialty, u.approved
-            FROM users u
-            WHERE u.role = 'teacher'
-        """)
-        
-        teachers = cursor.fetchall()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
         conn.close()
         
-        return {"teachers": [dict(teacher) for teacher in teachers]}
-        
+        if user:
+            return dict(user)
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/users/{user_id}/approve")
+@app.patch("/user/{user_id}/approve")
 async def approve_user(user_id: int):
     try:
         conn = get_db_connection()
@@ -412,191 +321,6 @@ async def approve_user(user_id: int):
         
         return {"message": "User approved successfully"}
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/classes")
-async def create_class(cls: ClassCreate, teacher_id: int = Form(...)):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            """INSERT INTO classes (teacher_id, title, description, level, schedule, max_students) 
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (teacher_id, cls.title, cls.description, cls.level, cls.schedule, cls.max_students)
-        )
-        
-        class_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        return {
-            "message": "Class created successfully",
-            "class_id": class_id
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/classes")
-async def get_classes():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT c.*, u.full_name as teacher_name 
-            FROM classes c
-            JOIN users u ON c.teacher_id = u.id
-        """)
-        
-        classes = cursor.fetchall()
-        conn.close()
-        
-        return {"classes": [dict(cls) for cls in classes]}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/enroll/{class_id}/{student_id}")
-async def enroll_student(class_id: int, student_id: int):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "SELECT * FROM enrollments WHERE student_id = ? AND class_id = ?",
-            (student_id, class_id)
-        )
-        
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Student already enrolled in this class")
-        
-        cursor.execute(
-            "INSERT INTO enrollments (student_id, class_id) VALUES (?, ?)",
-            (student_id, class_id)
-        )
-        
-        conn.commit()
-        conn.close()
-        
-        return {"message": "Student enrolled successfully"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/classes/{teacher_id}")
-async def get_teacher_classes(teacher_id: int):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "SELECT * FROM classes WHERE teacher_id = ?",
-            (teacher_id,)
-        )
-        
-        classes = cursor.fetchall()
-        conn.close()
-        
-        return {"classes": [dict(cls) for cls in classes]}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/enrollments/{class_id}")
-async def get_class_enrollments(class_id: int):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT u.id, u.full_name, u.email, e.enrolled_at
-            FROM enrollments e
-            JOIN users u ON e.student_id = u.id
-            WHERE e.class_id = ?
-        """, (class_id,))
-        
-        enrollments = cursor.fetchall()
-        conn.close()
-        
-        return {"enrollments": [dict(enrollment) for enrollment in enrollments]}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/lessons")
-async def create_lesson(lesson: LessonCreate):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            """INSERT INTO lessons (class_id, title, content, order_index) 
-               VALUES (?, ?, ?, ?)""",
-            (lesson.class_id, lesson.title, lesson.content, lesson.order_index)
-        )
-        
-        lesson_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        return {
-            "message": "Lesson created successfully",
-            "lesson_id": lesson_id
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/lessons/{class_id}")
-async def get_class_lessons(class_id: int):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "SELECT * FROM lessons WHERE class_id = ? ORDER BY order_index",
-            (class_id,)
-        )
-        
-        lessons = cursor.fetchall()
-        conn.close()
-        
-        return {"lessons": [dict(lesson) for lesson in lessons]}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/user/{user_id}")
-async def get_user(user_id: int):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "SELECT * FROM users WHERE id = ?",
-            (user_id,)
-        )
-        
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user:
-            return {
-                "id": user['id'],
-                "username": user['username'],
-                "full_name": user['full_name'],
-                "email": user['email'],
-                "role": user['role'],
-                "approved": bool(user['approved'])
-            }
-        else:
-            raise HTTPException(status_code=404, detail="User not found")
-            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
