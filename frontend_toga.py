@@ -2,7 +2,6 @@
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
-from toga import Dialog, Label, Button
 import requests
 import json
 
@@ -18,20 +17,12 @@ class QuranApp(toga.App):
         self.main_window.show()
     
     async def show_error_dialog(self, title, message):
-        dialog = Dialog(
-            title=title,
-            content=Label(message),
-            on_result=lambda dialog: None
-        )
-        await dialog.show_async()
+        # استفاده از dialogs به جای Dialog
+        await self.main_window.dialogs.error_dialog(title, message)
     
     async def show_info_dialog(self, title, message):
-        dialog = Dialog(
-            title=title,
-            content=Label(message),
-            on_result=lambda dialog: None
-        )
-        await dialog.show_async()
+        # استفاده از dialogs به جای Dialog
+        await self.main_window.dialogs.info_dialog(title, message)
     
     def show_login_screen(self, widget=None):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
