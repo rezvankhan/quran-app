@@ -68,13 +68,6 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-class ClassCreate(BaseModel):
-    title: str
-    description: str
-    level: str
-    schedule: str
-    max_students: int
-
 # تابع hash کردن password
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -108,6 +101,17 @@ def init_db():
                 user_id INTEGER,
                 level TEXT,
                 progress INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        
+        # جدول teachers
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teachers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                experience TEXT,
+                bio TEXT,
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         """)
@@ -219,9 +223,10 @@ async def register_teacher(teacher: TeacherRegister):
         
         user_id = cursor.lastrowid
         
+        # درست شد: INSERT INTO teachers نه students
         cursor.execute(
-            "INSERT INTO students (user_id, level) VALUES (?, ?)",
-            (user_id, 'teacher')
+            "INSERT INTO teachers (user_id) VALUES (?)",
+            (user_id,)
         )
         
         conn.commit()
@@ -305,7 +310,7 @@ async def get_user(user_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/user/{user_id}/approve")
+@app.patch("/users/{user_id}/approve")
 async def approve_user(user_id: int):
     try:
         conn = get_db_connection()
