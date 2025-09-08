@@ -1,14 +1,14 @@
+# creat_tables.py - فایل ایجاد جداول
 import sqlite3
 import os
 
 def create_tables():
     try:
-        # استفاده از path مطلق
         db_path = os.path.join(os.path.dirname(__file__), 'quran_db.sqlite3')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # ایجاد جدول users
+        # جدول users
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -16,7 +16,7 @@ def create_tables():
                 password TEXT NOT NULL,
                 role TEXT DEFAULT 'student',
                 full_name TEXT,
-                email TEXT,
+                email TEXT UNIQUE,
                 grade TEXT,
                 specialty TEXT,
                 approved BOOLEAN DEFAULT FALSE,
@@ -24,18 +24,28 @@ def create_tables():
             )
         """)
         
-        # اضافه کردن این بخش برای جدول students
+        # جدول students
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS students (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                level TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                user_id INTEGER,
+                level TEXT,
+                progress INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users (id)
             )
         """)
-
+        
+        # جدول teachers
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teachers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                experience TEXT,
+                bio TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        
         conn.commit()
         conn.close()
         print("✅ جداول در SQLite ایجاد شدند")
