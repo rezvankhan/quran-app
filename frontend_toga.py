@@ -1,4 +1,4 @@
-# Frontend-toga.py - با استفاده از روش جدید dialogs
+# Frontend-toga.py - با روش ساده‌تر
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -15,14 +15,6 @@ class QuranApp(toga.App):
         self.main_window = toga.MainWindow(title=self.formal_name, size=(400, 700))
         self.show_login_screen()
         self.main_window.show()
-    
-    async def show_error_dialog(self, title, message):
-        # استفاده از dialogs به جای Dialog
-        await self.main_window.dialogs.error_dialog(title, message)
-    
-    async def show_info_dialog(self, title, message):
-        # استفاده از dialogs به جای Dialog
-        await self.main_window.dialogs.info_dialog(title, message)
     
     def show_login_screen(self, widget=None):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
@@ -194,13 +186,13 @@ class QuranApp(toga.App):
         
         self.main_window.content = main_box
     
-    async def login(self, widget):
+    def login(self, widget):
         try:
             identifier = self.username_input.value.strip()
             password = self.password_input.value
             
             if not identifier or not password:
-                await self.show_error_dialog("Error", "Please enter both username/email and password")
+                self.main_window.error_dialog("Error", "Please enter both username/email and password")
                 return
             
             response = requests.post(
@@ -218,25 +210,25 @@ class QuranApp(toga.App):
             if response.status_code == 200:
                 result = response.json()
                 self.current_user = result['user']
-                await self.show_info_dialog("Success", f"Login successful! Welcome {self.current_user['full_name']}")
+                self.main_window.info_dialog("Success", f"Login successful! Welcome {self.current_user['full_name']}")
                 self.show_main_dashboard(self.current_user)
                 
             elif response.status_code == 401:
-                await self.show_error_dialog("Error", "Invalid credentials! Please check your username/email and password")
+                self.main_window.error_dialog("Error", "Invalid credentials! Please check your username/email and password")
             else:
                 error_msg = response.json().get("detail", "Login failed! Please try again.")
-                await self.show_error_dialog("Error", f"Login failed: {error_msg}")
+                self.main_window.error_dialog("Error", f"Login failed: {error_msg}")
                 
         except Exception as e:
-            await self.show_error_dialog("Error", f"Connection error: {str(e)}")
+            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
     
-    async def logout(self, widget):
+    def logout(self, widget):
         self.current_user = None
         self.user_token = None
         self.show_login_screen()
-        await self.show_info_dialog("Info", "Logged out successfully")
+        self.main_window.info_dialog("Info", "Logged out successfully")
     
-    async def register_student(self, widget):
+    def register_student(self, widget):
         try:
             name = self.name_input.value.strip()
             email = self.email_input.value.strip()
@@ -244,7 +236,7 @@ class QuranApp(toga.App):
             level = self.level_input.value
             
             if not all([name, email, password, level]):
-                await self.show_error_dialog("Error", "Please fill all fields")
+                self.main_window.error_dialog("Error", "Please fill all fields")
                 return
             
             response = requests.post(
@@ -261,16 +253,16 @@ class QuranApp(toga.App):
             
             if response.status_code == 200:
                 result = response.json()
-                await self.show_info_dialog("Success", f"Student registration successful! User ID: {result['user_id']}. Please login with your email: {email}")
+                self.main_window.info_dialog("Success", f"Student registration successful! User ID: {result['user_id']}. Please login with your email: {email}")
                 self.show_login_screen()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
-                await self.show_error_dialog("Error", f"Registration failed: {error_msg}")
+                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
                 
         except Exception as e:
-            await self.show_error_dialog("Error", f"Connection error: {str(e)}")
+            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
     
-    async def register_teacher(self, widget):
+    def register_teacher(self, widget):
         try:
             username = self.teacher_username.value.strip()
             password = self.teacher_password.value
@@ -279,7 +271,7 @@ class QuranApp(toga.App):
             specialty = self.teacher_specialty.value.strip()
             
             if not all([username, password, full_name, email, specialty]):
-                await self.show_error_dialog("Error", "Please fill all fields")
+                self.main_window.error_dialog("Error", "Please fill all fields")
                 return
             
             response = requests.post(
@@ -297,41 +289,41 @@ class QuranApp(toga.App):
             
             if response.status_code == 200:
                 result = response.json()
-                await self.show_info_dialog("Success", f"Teacher registration successful! User ID: {result['user_id']}. Please login with your username: {username}")
+                self.main_window.info_dialog("Success", f"Teacher registration successful! User ID: {result['user_id']}. Please login with your username: {username}")
                 self.show_login_screen()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
-                await self.show_error_dialog("Error", f"Registration failed: {error_msg}")
+                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
                 
         except Exception as e:
-            await self.show_error_dialog("Error", f"Connection error: {str(e)}")
+            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
     
-    async def show_student_courses(self, widget):
-        await self.show_info_dialog("Info", "Student Courses feature coming soon!")
+    def show_student_courses(self, widget):
+        self.main_window.info_dialog("Info", "Student Courses feature coming soon!")
     
-    async def show_student_progress(self, widget):
-        await self.show_info_dialog("Info", "Student Progress feature coming soon!")
+    def show_student_progress(self, widget):
+        self.main_window.info_dialog("Info", "Student Progress feature coming soon!")
     
-    async def find_teachers(self, widget):
-        await self.show_info_dialog("Info", "Find Teachers feature coming soon!")
+    def find_teachers(self, widget):
+        self.main_window.info_dialog("Info", "Find Teachers feature coming soon!")
     
-    async def show_teacher_classes(self, widget):
-        await self.show_info_dialog("Info", "Teacher Classes feature coming soon!")
+    def show_teacher_classes(self, widget):
+        self.main_window.info_dialog("Info", "Teacher Classes feature coming soon!")
     
-    async def create_class(self, widget):
-        await self.show_info_dialog("Info", "Create Class feature coming soon!")
+    def create_class(self, widget):
+        self.main_window.info_dialog("Info", "Create Class feature coming soon!")
     
-    async def show_teacher_students(self, widget):
-        await self.show_info_dialog("Info", "Teacher Students feature coming soon!")
+    def show_teacher_students(self, widget):
+        self.main_window.info_dialog("Info", "Teacher Students feature coming soon!")
     
-    async def manage_users(self, widget):
-        await self.show_info_dialog("Info", "Manage Users feature coming soon!")
+    def manage_users(self, widget):
+        self.main_window.info_dialog("Info", "Manage Users feature coming soon!")
     
-    async def show_stats(self, widget):
-        await self.show_info_dialog("Info", "Statistics feature coming soon!")
+    def show_stats(self, widget):
+        self.main_window.info_dialog("Info", "Statistics feature coming soon!")
     
-    async def settings(self, widget):
-        await self.show_info_dialog("Info", "Settings feature coming soon!")
+    def settings(self, widget):
+        self.main_window.info_dialog("Info", "Settings feature coming soon!")
 
 def main():
     return QuranApp()
