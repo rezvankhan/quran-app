@@ -4,7 +4,12 @@ import os
 
 def create_tables():
     try:
-        db_path = os.path.join(os.path.dirname(__file__), 'quran_db.sqlite3')
+        # استفاده از مسیر یکسان با backend
+        if 'RENDER' in os.environ:
+            db_path = '/tmp/quran_db.sqlite3'
+        else:
+            db_path = 'quran_db.sqlite3'
+            
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -90,77 +95,6 @@ def create_tables():
             )
         """)
         
-        # جدول lessons - دروس
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS lessons (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                class_id INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                content TEXT,
-                order_index INTEGER,
-                duration INTEGER,
-                video_url TEXT,
-                resources TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (class_id) REFERENCES classes (id) ON DELETE CASCADE
-            )
-        """)
-        
-        # جدول progress - پیشرفت دانشجویان
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS student_progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_id INTEGER NOT NULL,
-                lesson_id INTEGER NOT NULL,
-                class_id INTEGER NOT NULL,
-                completed BOOLEAN DEFAULT FALSE,
-                completion_date TIMESTAMP,
-                score DECIMAL(5,2),
-                feedback TEXT,
-                FOREIGN KEY (student_id) REFERENCES users (id) ON DELETE CASCADE,
-                FOREIGN KEY (lesson_id) REFERENCES lessons (id) ON DELETE CASCADE,
-                FOREIGN KEY (class_id) REFERENCES classes (id) ON DELETE CASCADE,
-                UNIQUE(student_id, lesson_id)
-            )
-        """)
-        
-        # جدول payments - پرداخت‌ها
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS payments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_id INTEGER NOT NULL,
-                teacher_id INTEGER NOT NULL,
-                class_id INTEGER,
-                amount DECIMAL(10,2) NOT NULL,
-                currency TEXT DEFAULT 'USDT',
-                payment_method TEXT,
-                transaction_id TEXT UNIQUE,
-                status TEXT DEFAULT 'pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                completed_at TIMESTAMP,
-                FOREIGN KEY (student_id) REFERENCES users (id) ON DELETE CASCADE,
-                FOREIGN KEY (teacher_id) REFERENCES users (id) ON DELETE CASCADE,
-                FOREIGN KEY (class_id) REFERENCES classes (id) ON DELETE CASCADE
-            )
-        """)
-        
-        # جدول messages - پیام‌ها
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sender_id INTEGER NOT NULL,
-                receiver_id INTEGER NOT NULL,
-                class_id INTEGER,
-                message TEXT NOT NULL,
-                message_type TEXT DEFAULT 'text',
-                read BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE CASCADE,
-                FOREIGN KEY (receiver_id) REFERENCES users (id) ON DELETE CASCADE,
-                FOREIGN KEY (class_id) REFERENCES classes (id) ON DELETE CASCADE
-            )
-        """)
-        
         conn.commit()
         conn.close()
         print("✅ پایگاه داده کامل با تمام جداول ایجاد شد")
@@ -170,19 +104,47 @@ def create_tables():
 
 def init_sample_data():
     try:
-        db_path = os.path.join(os.path.dirname(__file__), 'quran_db.sqlite3')
+        if 'RENDER' in os.environ:
+            db_path = '/tmp/quran_db.sqlite3'
+        else:
+            db_path = 'quran_db.sqlite3'
+            
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
         # داده‌های نمونه برای تست
+        import hashlib
+        def hash_pw(password):
+            return hashlib.sha256(password.encode()).hexdigest()
+        
+        # حذف داده‌های قدیمی اگر وجود دارند
+        cursor.execute("DELETE FROM users")
+        
+        # درج داده‌های نمونه
         cursor.execute("""
-            INSERT OR IGNORE INTO users 
+            INSERT INTO users 
             (username, password, role, full_name, email, approved) 
             VALUES 
-            ('admin', 'admin123', 'admin', 'مدیر سیستم', 'admin@quran.com', 1),
-            ('teacher1', 'teacher123', 'teacher', 'استاد احمد', 'teacher1@quran.com', 1),
-            ('student1', 'student123', 'student', 'دانشجو محمد', 'student1@quran.com', 1)
-        """)
+            (?, ?, ?, ?, ?, ?)
+        """, ('admin', hash_pw('admin123'), 'admin', 'مدیر سیستم', 'admin@quran.com', 1))
+        
+        cursor.execute("""
+            INSERT INTO users 
+            (username, password, role, full_name, email, approved) 
+            VALUES 
+            (?, ?, ?, ?, ?, ?)
+        """, ('teacher1', hash_pw('teacher123'), 'teacher', 'استاد احمد', 'teacher1@quran.com', 1))
+        
+        cursor.execute("""
+            INSERT INTO users 
+            (username, password, role, full_name, email, approved) 
+            VALUES 
+            (?, ?, ?, ?, ?, ?)
+        """, ('student1@quran.com', hash_pw('student123'), 'student', 'دانشجو محمد', 'student1@quran.com', 1))
+        
+        # اضافه کردن به جداول فرعی
+        cursor.execute("INSERT INTO teachers (user_id) VALUES (2)")
+        cursor.execute("INSERT INTO students (user_id, level) VALUES (3, 'Beginner')")
         
         conn.commit()
         conn.close()
