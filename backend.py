@@ -143,6 +143,7 @@ async def register_student(student: StudentRegister):
         
         hashed_password = hash_password(student.password)
         
+        # استفاده از email به عنوان username برای دانشجویان
         cursor.execute(
             "INSERT INTO users (username, password, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
             (student.email, hashed_password, student.name, student.email, 'student')
@@ -203,9 +204,10 @@ async def login(login_data: LoginRequest):
         
         hashed_password = hash_password(login_data.password)
         
+        # جستجو هم با username و هم با email
         cursor.execute(
-            "SELECT * FROM users WHERE username = ? AND password = ?",
-            (login_data.username, hashed_password)
+            "SELECT * FROM users WHERE (username = ? OR email = ?) AND password = ?",
+            (login_data.username, login_data.username, hashed_password)
         )
         
         user = cursor.fetchone()
@@ -226,6 +228,23 @@ async def login(login_data: LoginRequest):
         else:
             raise HTTPException(status_code=401, detail="Invalid credentials")
             
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# اضافه کردن endpoint جدید برای دریافت کاربران
+@app.get("/users")
+async def get_users():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id, username, full_name, email, role, approved FROM users")
+        users = cursor.fetchall()
+        
+        conn.close()
+        
+        return {"users": [dict(user) for user in users]}
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
