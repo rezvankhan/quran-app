@@ -11,7 +11,7 @@ class QuranApp(toga.App):
         self.show_login_screen()
         self.main_window.show()
     
-    def show_login_screen(self):
+    def show_login_screen(self, widget=None):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
         title_label = toga.Label(
@@ -19,8 +19,9 @@ class QuranApp(toga.App):
             style=Pack(text_align=CENTER, font_size=24, font_weight="bold", padding=20)
         )
         
+        # تغییر placeholder برای راهنمایی کاربران
         self.username_input = toga.TextInput(
-            placeholder="Username",
+            placeholder="Username (Teachers) or Email (Students)",
             style=Pack(padding=10, flex=1)
         )
         
@@ -47,12 +48,19 @@ class QuranApp(toga.App):
             style=Pack(padding=15, background_color="#FF9800", color="white")
         )
         
+        # اضافه کردن راهنمایی
+        help_label = toga.Label(
+            "Note: Students login with email, Teachers with username",
+            style=Pack(text_align=CENTER, font_size=10, color="gray", padding=10)
+        )
+        
         main_box.add(title_label)
         main_box.add(self.username_input)
         main_box.add(self.password_input)
         main_box.add(login_btn)
         main_box.add(register_student_btn)
         main_box.add(register_teacher_btn)
+        main_box.add(help_label)
         
         self.main_window.content = main_box
     
@@ -65,7 +73,7 @@ class QuranApp(toga.App):
         )
         
         self.name_input = toga.TextInput(placeholder="Full Name", style=Pack(padding=10))
-        self.email_input = toga.TextInput(placeholder="Email", style=Pack(padding=10))
+        self.email_input = toga.TextInput(placeholder="Email (will be used for login)", style=Pack(padding=10))
         self.password_input = toga.PasswordInput(placeholder="Password", style=Pack(padding=10))
         self.level_input = toga.Selection(
             items=["Beginner", "Intermediate", "Advanced"],
@@ -102,7 +110,7 @@ class QuranApp(toga.App):
             style=Pack(text_align=CENTER, font_size=20, font_weight="bold", padding=10)
         )
         
-        self.teacher_username = toga.TextInput(placeholder="Username", style=Pack(padding=10))
+        self.teacher_username = toga.TextInput(placeholder="Username (for login)", style=Pack(padding=10))
         self.teacher_password = toga.PasswordInput(placeholder="Password", style=Pack(padding=10))
         self.teacher_name = toga.TextInput(placeholder="Full Name", style=Pack(padding=10))
         self.teacher_email = toga.TextInput(placeholder="Email", style=Pack(padding=10))
@@ -133,44 +141,72 @@ class QuranApp(toga.App):
     
     def login(self, widget):
         try:
+            identifier = self.username_input.value.strip()
+            password = self.password_input.value
+            
+            if not identifier or not password:
+                self.main_window.error_dialog("Error", "Please enter both username/email and password")
+                return
+            
+            # استفاده از endpoint صحیح لاگین
             response = requests.post(
-                "https://quran-app-kw38.onrender.com/login",
+                "https://quran-app-kw38.onrender.com/login",  # endpoint صحیح
                 json={
-                    "username": self.username_input.value,
-                    "password": self.password_input.value
+                    "username": identifier,  # برای Students: email, برای Teachers: username
+                    "password": password
                 },
                 headers={"Content-Type": "application/json"},
-                timeout=30  # افزایش timeout
+                timeout=30
             )
             
+            # چاپ پاسخ برای دیباگ
+            print(f"Login Response: {response.status_code} - {response.text}")
+            
             if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Login successful!")
+                user_data = response.json()
+                self.main_window.info_dialog("Success", f"Login successful!\nWelcome {user_data['user']['full_name']}")
+                # اینجا می‌توانید به صفحه اصلی بروید
+                
+            elif response.status_code == 401:
+                self.main_window.error_dialog("Error", "Invalid credentials! Please check your username/email and password")
+                
             else:
-                self.main_window.error_dialog("Error", "Login failed! Check your credentials.")
+                error_msg = response.json().get("detail", "Login failed! Please try again.")
+                self.main_window.error_dialog("Error", f"Login failed: {error_msg}")
                 
         except requests.exceptions.Timeout:
             self.main_window.error_dialog("Error", "Connection timeout! Please try again.")
         except requests.exceptions.ConnectionError:
-            self.main_window.error_dialog("Error", "Cannot connect to server. Check your internet.")
+            self.main_window.error_dialog("Error", "Cannot connect to server. Check your internet connection.")
         except Exception as e:
             self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
     
     def register_student(self, widget):
         try:
+            name = self.name_input.value.strip()
+            email = self.email_input.value.strip()
+            password = self.password_input.value
+            level = self.level_input.value
+            
+            if not all([name, email, password, level]):
+                self.main_window.error_dialog("Error", "Please fill all fields")
+                return
+            
             response = requests.post(
                 "https://quran-app-kw38.onrender.com/register/student",
                 json={
-                    "name": self.name_input.value,
-                    "email": self.email_input.value,
-                    "password": self.password_input.value,
-                    "level": self.level_input.value
+                    "name": name,
+                    "email": email,
+                    "password": password,
+                    "level": level
                 },
                 headers={"Content-Type": "application/json"},
-                timeout=30  # افزایش timeout
+                timeout=30
             )
             
             if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Student registration successful!")
+                result = response.json()
+                self.main_window.info_dialog("Success", f"Student registration successful!\nUser ID: {result['user_id']}\nPlease login with your email: {email}")
                 self.show_login_screen()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
@@ -179,27 +215,38 @@ class QuranApp(toga.App):
         except requests.exceptions.Timeout:
             self.main_window.error_dialog("Error", "Connection timeout! Please try again.")
         except requests.exceptions.ConnectionError:
-            self.main_window.error_dialog("Error", "Cannot connect to server. Check your internet.")
+            self.main_window.error_dialog("Error", "Cannot connect to server. Check your internet connection.")
         except Exception as e:
             self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
     
     def register_teacher(self, widget):
         try:
+            username = self.teacher_username.value.strip()
+            password = self.teacher_password.value
+            full_name = self.teacher_name.value.strip()
+            email = self.teacher_email.value.strip()
+            specialty = self.teacher_specialty.value.strip()
+            
+            if not all([username, password, full_name, email, specialty]):
+                self.main_window.error_dialog("Error", "Please fill all fields")
+                return
+            
             response = requests.post(
                 "https://quran-app-kw38.onrender.com/register/teacher",
                 json={
-                    "username": self.teacher_username.value,
-                    "password": self.teacher_password.value,
-                    "full_name": self.teacher_name.value,
-                    "email": self.teacher_email.value,
-                    "specialty": self.teacher_specialty.value
+                    "username": username,
+                    "password": password,
+                    "full_name": full_name,
+                    "email": email,
+                    "specialty": specialty
                 },
                 headers={"Content-Type": "application/json"},
-                timeout=30  # افزایش timeout
+                timeout=30
             )
             
             if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Teacher registration successful!")
+                result = response.json()
+                self.main_window.info_dialog("Success", f"Teacher registration successful!\nUser ID: {result['user_id']}\nPlease login with your username: {username}")
                 self.show_login_screen()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
@@ -208,7 +255,7 @@ class QuranApp(toga.App):
         except requests.exceptions.Timeout:
             self.main_window.error_dialog("Error", "Connection timeout! Please try again.")
         except requests.exceptions.ConnectionError:
-            self.main_window.error_dialog("Error", "Cannot connect to server. Check your internet.")
+            self.main_window.error_dialog("Error", "Cannot connect to server. Check your internet connection.")
         except Exception as e:
             self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
 
