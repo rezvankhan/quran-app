@@ -1,4 +1,4 @@
-# backend.py - کامل با ثبت نام معلم
+# backend.py - اصلاح شده برای Render
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -16,8 +16,20 @@ import json
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# تشخیص محیط
+def is_render():
+    return 'RENDER' in os.environ
+
+# تابع اتصال به دیتابیس
 def get_db_connection():
-    conn = sqlite3.connect('quran_db.sqlite3')
+    if is_render():
+        # در Render از مسیر /tmp/ استفاده می‌کنیم
+        db_path = '/tmp/quran_db.sqlite3'
+    else:
+        # در محیط local
+        db_path = 'quran_db.sqlite3'
+    
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -108,7 +120,11 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Quran App API is running", "timestamp": datetime.now().isoformat()}
+    return {
+        "message": "Quran App API is running", 
+        "environment": "Render" if is_render() else "Local",
+        "timestamp": datetime.now().isoformat()
+    }
 
 @app.get("/health")
 async def health_check():
@@ -215,4 +231,5 @@ async def login(login_data: LoginRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
