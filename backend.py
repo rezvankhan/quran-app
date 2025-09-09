@@ -1,32 +1,18 @@
-# backend.py - اصلاح شده برای Render
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+# backend.py - کامل
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import sqlite3
-import logging
 import hashlib
 import os
 from datetime import datetime
-from typing import Optional
 from contextlib import asynccontextmanager
-import json
 
-# تنظیمات logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# تشخیص محیط
-def is_render():
-    return 'RENDER' in os.environ
-
-# تابع اتصال به دیتابیس
+# تنظیمات
 def get_db_connection():
-    if is_render():
-        # در Render از مسیر /tmp/ استفاده می‌کنیم
+    if 'RENDER' in os.environ:
         db_path = '/tmp/quran_db.sqlite3'
     else:
-        # در محیط local
         db_path = 'quran_db.sqlite3'
     
     conn = sqlite3.connect(db_path)
@@ -51,16 +37,19 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-# تابع hash کردن password
+class EnrollmentRequest(BaseModel):
+    student_id: int
+
+# توابع کمکی
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
-# ایجاد جداول
 def init_db():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # ایجاد جداول
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +59,7 @@ def init_db():
                 full_name TEXT,
                 email TEXT UNIQUE,
                 specialty TEXT,
-                approved BOOLEAN DEFAULT FALSE,
+                approved BOOLEAN DEFAULT TRUE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -94,19 +83,48 @@ def init_db():
             )
         """)
         
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS classes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                teacher_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                level TEXT DEFAULT 'Beginner',
+                category TEXT,
+                duration INTEGER DEFAULT 60,
+                price DECIMAL(10,2) DEFAULT 0,
+                max_students INTEGER DEFAULT 10,
+                schedule TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (teacher_id) REFERENCES users (id)
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS enrollments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL,
+                class_id INTEGER NOT NULL,
+                enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'active',
+                progress INTEGER DEFAULT 0,
+                FOREIGN KEY (student_id) REFERENCES users (id),
+                FOREIGN KEY (class_id) REFERENCES classes (id),
+                UNIQUE(student_id, class_id)
+            )
+        """)
+        
         conn.commit()
         conn.close()
-        logger.info("Database tables created successfully")
         
     except Exception as e:
-        logger.error(f"Database initialization error: {e}")
+        print(f"Database initialization error: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    logger.info("Application startup complete")
     yield
-    logger.info("Application shutdown")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -118,22 +136,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# routes
 @app.get("/")
 async def root():
-    return {
-        "message": "Quran App API is running", 
-        "environment": "Render" if is_render() else "Local",
-        "timestamp": datetime.now().isoformat()
-    }
+    return {"message": "Quran App API", "status": "running"}
 
 @app.get("/health")
 async def health_check():
-    try:
-        conn = get_db_connection()
-        conn.close()
-        return {"status": "healthy", "timestamp": datetime.now().isoformat()}
-    except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 @app.post("/register/student")
 async def register_student(student: StudentRegister):
@@ -143,7 +153,6 @@ async def register_student(student: StudentRegister):
         
         hashed_password = hash_password(student.password)
         
-        # استفاده از email به عنوان username برای دانشجویان
         cursor.execute(
             "INSERT INTO users (username, password, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
             (student.email, hashed_password, student.name, student.email, 'student')
@@ -204,7 +213,6 @@ async def login(login_data: LoginRequest):
         
         hashed_password = hash_password(login_data.password)
         
-        # جستجو هم با username و هم با email
         cursor.execute(
             "SELECT * FROM users WHERE (username = ? OR email = ?) AND password = ?",
             (login_data.username, login_data.username, hashed_password)
@@ -222,6 +230,7 @@ async def login(login_data: LoginRequest):
                     "full_name": user['full_name'],
                     "email": user['email'],
                     "role": user['role'],
+                    "specialty": user.get('specialty', ''),
                     "approved": bool(user['approved'])
                 }
             }
@@ -231,20 +240,115 @@ async def login(login_data: LoginRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# اضافه کردن endpoint جدید برای دریافت کاربران
-@app.get("/users")
-async def get_users():
+@app.get("/courses")
+async def get_courses():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT id, username, full_name, email, role, approved FROM users")
-        users = cursor.fetchall()
+        cursor.execute("""
+            SELECT c.*, u.full_name as teacher_name 
+            FROM classes c 
+            JOIN users u ON c.teacher_id = u.id 
+            WHERE c.status = 'active'
+        """)
         
+        courses = cursor.fetchall()
         conn.close()
         
-        return {"users": [dict(user) for user in users]}
+        return {"courses": [dict(course) for course in courses]}
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/my-courses/{user_id}")
+async def get_my_courses(user_id: int):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT c.*, u.full_name as teacher_name, e.progress, e.enrolled_at
+            FROM classes c
+            JOIN enrollments e ON c.id = e.class_id
+            JOIN users u ON c.teacher_id = u.id
+            WHERE e.student_id = ? AND e.status = 'active'
+        """, (user_id,))
+        
+        courses = cursor.fetchall()
+        conn.close()
+        
+        return {"my_courses": [dict(course) for course in courses]}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/enroll/{class_id}")
+async def enroll_student(class_id: int, request: EnrollmentRequest):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # چک کردن وجود کلاس
+        cursor.execute("SELECT * FROM classes WHERE id = ? AND status = 'active'", (class_id,))
+        class_data = cursor.fetchone()
+        
+        if not class_data:
+            raise HTTPException(status_code=404, detail="Class not found")
+        
+        # چک کردن وجود کاربر
+        cursor.execute("SELECT * FROM users WHERE id = ? AND role = 'student'", (request.student_id,))
+        student = cursor.fetchone()
+        
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        # چک کردن ثبت‌نام تکراری
+        cursor.execute(
+            "SELECT * FROM enrollments WHERE student_id = ? AND class_id = ?",
+            (request.student_id, class_id)
+        )
+        existing = cursor.fetchone()
+        
+        if existing:
+            raise HTTPException(status_code=400, detail="Already enrolled in this class")
+        
+        # ثبت‌نام
+        cursor.execute(
+            "INSERT INTO enrollments (student_id, class_id, status) VALUES (?, ?, 'active')",
+            (request.student_id, class_id)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True, "message": "Enrollment successful"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/users/{user_id}")
+async def get_user(user_id: int):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT u.*, s.level as student_level, t.experience as teacher_exp
+            FROM users u
+            LEFT JOIN students s ON u.id = s.user_id
+            LEFT JOIN teachers t ON u.id = t.user_id
+            WHERE u.id = ?
+        """, (user_id,))
+        
+        user = cursor.fetchone()
+        conn.close()
+        
+        if user:
+            return {"user": dict(user)}
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
