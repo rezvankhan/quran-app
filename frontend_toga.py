@@ -318,6 +318,8 @@ class QuranApp(toga.App):
                 timeout=30
             )
             
+            print(f"Login response: {response.status_code} - {response.text}")
+            
             if response.status_code == 200:
                 result = response.json()
                 self.current_user = result['user']
