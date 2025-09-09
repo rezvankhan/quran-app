@@ -13,7 +13,6 @@ def create_tables():
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # ایجاد جداول (همانند backend)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +79,7 @@ def create_tables():
         """)
         
         conn.commit()
+        conn.close()
         print("✅ Database tables created successfully")
         
     except Exception as err:
