@@ -1,4 +1,4 @@
-# Frontend-toga.py - کامل (تصحیح شده)
+# Frontend-toga.py - کامل
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -217,6 +217,30 @@ class QuranApp(toga.App):
         info_box.add(toga.Label(f"Specialty: {user_data.get('specialty', 'General')}", style=Pack(padding=5)))
         content_box.add(info_box)
         
+        # Quran Course Types ComboBox
+        quran_types_label = toga.Label(
+            "Quran Course Types:",
+            style=Pack(padding=10, font_weight="bold")
+        )
+        
+        self.quran_type_combo = toga.Selection(
+            items=[
+                "Tajweed Fundamentals",
+                "Quran Recitation (Tartil)",
+                "Quran Recitation (Tahqeeq)",
+                "Quran Recitation (Tadweer)",
+                "Quran Memorization (Hifz)",
+                "Quran Tafsir",
+                "Quran Translation",
+                "Arabic Pronunciation",
+                "Voice and Melody"
+            ],
+            style=Pack(padding=10, width=250)
+        )
+        
+        content_box.add(quran_types_label)
+        content_box.add(self.quran_type_combo)
+        
         content_box.add(toga.Button(
             "📖 My Classes", 
             on_press=self.show_teacher_classes,
@@ -224,7 +248,7 @@ class QuranApp(toga.App):
         ))
         
         content_box.add(toga.Button(
-            "➕ Create Class", 
+            "➕ Create New Course", 
             on_press=self.create_class,
             style=Pack(padding=15, width=200, background_color="#4CAF50", color="white")
         ))
@@ -276,7 +300,6 @@ class QuranApp(toga.App):
                 
                 self.main_window.content = main_box
             else:
-                # استفاده از متدهای قدیمی اما کارآمد
                 self.main_window.error_dialog("Error", "Failed to load courses")
                 
         except Exception as e:
@@ -289,13 +312,100 @@ class QuranApp(toga.App):
         self.main_window.info_dialog("Find Teachers", "Available teachers list will appear here")
 
     def show_student_schedule(self, widget):
-        self.main_window.info_dialog("Schedule", "Your class schedule will here")
+        self.main_window.info_dialog("Schedule", "Your class schedule will appear here")
 
     def show_teacher_classes(self, widget):
         self.main_window.info_dialog("My Classes", "List of your teaching classes will appear here")
 
     def create_class(self, widget):
-        self.main_window.info_dialog("Create Class", "Class creation form will appear here")
+        try:
+            selected_type = self.quran_type_combo.value
+            if not selected_type:
+                self.main_window.info_dialog("Error", "Please select a Quran course type")
+                return
+            
+            self.show_create_course_form(selected_type)
+            
+        except Exception as e:
+            self.main_window.error_dialog("Error", f"Error creating course: {str(e)}")
+
+    def show_create_course_form(self, course_type):
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
+        
+        header_box = toga.Box(style=Pack(direction=ROW, padding=10, background_color="#e3f2fd"))
+        header_box.add(toga.Label(f"Create New Course - {course_type}", style=Pack(flex=1, font_size=18, font_weight="bold")))
+        back_btn = toga.Button("Back", on_press=lambda w: self.show_teacher_dashboard(self.current_user))
+        header_box.add(back_btn)
+        main_box.add(header_box)
+        
+        form_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
+        
+        form_box.add(toga.Label("Course Title:", style=Pack(padding=5)))
+        self.course_title = toga.TextInput(placeholder="Course title", style=Pack(padding=5))
+        form_box.add(self.course_title)
+        
+        form_box.add(toga.Label("Description:", style=Pack(padding=5)))
+        self.course_description = toga.MultilineTextInput(placeholder="Course description", style=Pack(padding=5, height=100))
+        form_box.add(self.course_description)
+        
+        form_box.add(toga.Label("Level:", style=Pack(padding=5)))
+        self.course_level = toga.Selection(
+            items=["Beginner", "Intermediate", "Advanced"],
+            style=Pack(padding=5)
+        )
+        form_box.add(self.course_level)
+        
+        form_box.add(toga.Label("Duration (minutes):", style=Pack(padding=5)))
+        self.course_duration = toga.NumberInput(min_value=30, max_value=180, value=60, style=Pack(padding=5))
+        form_box.add(self.course_duration)
+        
+        form_box.add(toga.Label("Max Students:", style=Pack(padding=5)))
+        self.course_capacity = toga.NumberInput(min_value=1, max_value=50, value=10, style=Pack(padding=5))
+        form_box.add(self.course_capacity)
+        
+        form_box.add(toga.Label("Schedule:", style=Pack(padding=5)))
+        self.course_schedule = toga.TextInput(placeholder="e.g., Monday & Wednesday 18-20", style=Pack(padding=5))
+        form_box.add(self.course_schedule)
+        
+        create_btn = toga.Button(
+            "Create Course",
+            on_press=lambda w: self.submit_course(course_type),
+            style=Pack(padding=15, background_color="#4CAF50", color="white")
+        )
+        form_box.add(create_btn)
+        
+        main_box.add(form_box)
+        self.main_window.content = main_box
+
+    def submit_course(self, course_type):
+        try:
+            course_data = {
+                "title": self.course_title.value,
+                "description": self.course_description.value,
+                "level": self.course_level.value,
+                "category": course_type,
+                "duration": int(self.course_duration.value),
+                "max_students": int(self.course_capacity.value),
+                "schedule": self.course_schedule.value,
+                "price": 0
+            }
+            
+            response = requests.post(
+                "https://quran-app-kw38.onrender.com/teacher/courses",
+                json=course_data,
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                self.main_window.info_dialog("Success", "Course created successfully!")
+                self.show_teacher_dashboard(self.current_user)
+            else:
+                error_msg = response.json().get("detail", "Error creating course")
+                self.main_window.error_dialog("Error", error_msg)
+                
+        except Exception as e:
+            self.main_window.error_dialog("Error", f"Error creating course: {str(e)}")
 
     def show_teacher_students(self, widget):
         self.main_window.info_dialog("My Students", "List of your students will appear here")
