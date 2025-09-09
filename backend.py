@@ -1,4 +1,4 @@
-# backend.py - کامل با دیباگ
+# backend.py - کامل با رفع مشکل دیتابیس
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -49,12 +49,13 @@ class EnrollmentRequest(BaseModel):
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
-# ایجاد جداول
+# ایجاد جداول و داده‌های تست
 def init_db():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # ایجاد جداول
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,9 +121,92 @@ def init_db():
             )
         """)
         
-        conn.commit()
+        # اضافه کردن داده‌های تست اگر وجود ندارند
+        cursor.execute("SELECT COUNT(*) as count FROM users")
+        user_count = cursor.fetchone()['count']
+        
+        if user_count == 0:
+            logger.info("Adding test data to database...")
+            
+            # کاربران تست
+            test_users = [
+                ('admin@quran.com', hash_password('admin123'), 'admin', 'Admin User', 'admin@quran.com', '', True),
+                ('teacher1', hash_password('teacher123'), 'teacher', 'استاد احمد', 'teacher1@quran.com', 'Quran Recitation', True),
+                ('student1@quran.com', hash_password('student123'), 'student', 'دانشجو محمد', 'student1@quran.com', '', True),
+                ('student2@quran.com', hash_password('student123'), 'student', 'دانشجو فاطمه', 'student2@quran.com', '', True)
+            ]
+            
+            for user in test_users:
+                try:
+                    cursor.execute(
+                        "INSERT INTO users (username, password, role, full_name, email, specialty, approved) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        user
+                    )
+                    user_id = cursor.lastrowid
+                    
+                    if user[2] == 'student':
+                        cursor.execute(
+                            "INSERT INTO students (user_id, level) VALUES (?, ?)",
+                            (user_id, 'Beginner')
+                        )
+                    elif user[2] == 'teacher':
+                        cursor.execute(
+                            "INSERT INTO teachers (user_id, experience) VALUES (?, ?)",
+                            (user_id, '5 years experience')
+                        )
+                        
+                except sqlite3.IntegrityError as e:
+                    logger.warning(f"User already exists: {user[0]}")
+                    continue
+            
+            # کلاس‌های تست
+            cursor.execute("SELECT id FROM users WHERE username = 'teacher1'")
+            teacher_result = cursor.fetchone()
+            if teacher_result:
+                teacher_id = teacher_result['id']
+                
+                test_classes = [
+                    (teacher_id, 'Basic Quran Reading', 'Learn to read Quran from basics', 'Beginner', 'Recitation', 60, 0, 20, 'Mon, Wed, Fri 10:00-11:00'),
+                    (teacher_id, 'Tajweed Fundamentals', 'Learn proper pronunciation rules', 'Intermediate', 'Tajweed', 60, 0, 15, 'Tue, Thu 14:00-15:00'),
+                    (teacher_id, 'Advanced Recitation', 'Master Quran recitation', 'Advanced', 'Recitation', 90, 0, 10, 'Sat, Sun 09:00-10:30')
+                ]
+                
+                for class_data in test_classes:
+                    cursor.execute(
+                        "INSERT INTO classes (teacher_id, title, description, level, category, duration, price, max_students, schedule) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        class_data
+                    )
+                
+                # ثبت‌نام‌های تست
+                cursor.execute("SELECT id FROM users WHERE email = 'student1@quran.com'")
+                student1_result = cursor.fetchone()
+                cursor.execute("SELECT id FROM users WHERE email = 'student2@quran.com'")
+                student2_result = cursor.fetchone()
+                
+                if student1_result and student2_result:
+                    student1_id = student1_result['id']
+                    student2_id = student2_result['id']
+                    
+                    test_enrollments = [
+                        (student1_id, 1, 25),
+                        (student1_id, 2, 50),
+                        (student2_id, 1, 15)
+                    ]
+                    
+                    for enrollment in test_enrollments:
+                        try:
+                            cursor.execute(
+                                "INSERT INTO enrollments (student_id, class_id, progress) VALUES (?, ?, ?)",
+                                enrollment
+                            )
+                        except sqlite3.IntegrityError:
+                            continue
+            
+            conn.commit()
+            logger.info("Test data added successfully")
+        
         conn.close()
-        logger.info("Database tables created successfully")
+        logger.info("Database initialization completed successfully")
         
     except Exception as e:
         logger.error(f"Database initialization error: {e}")
@@ -146,11 +230,39 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Quran App API", "status": "running"}
+    return {"message": "Quran App API", "status": "running", "timestamp": datetime.now().isoformat()}
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as user_count FROM users")
+        user_count = cursor.fetchone()['user_count']
+        conn.close()
+        
+        return {
+            "status": "healthy", 
+            "timestamp": datetime.now().isoformat(),
+            "user_count": user_count,
+            "environment": "Render" if 'RENDER' in os.environ else "Local"
+        }
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}
+
+@app.get("/debug/users")
+async def debug_users():
+    """Endpoint برای دیباگ کاربران"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, email, role, full_name FROM users")
+        users = cursor.fetchall()
+        conn.close()
+        
+        return {"users": [dict(user) for user in users]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/register/student")
 async def register_student(student: StudentRegister):
@@ -159,7 +271,7 @@ async def register_student(student: StudentRegister):
         cursor = conn.cursor()
         
         hashed_password = hash_password(student.password)
-        logger.info(f"Registering student: {student.email}, password_hash: {hashed_password}")
+        logger.info(f"Registering student: {student.email}")
         
         cursor.execute(
             "INSERT INTO users (username, password, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
@@ -191,7 +303,7 @@ async def register_teacher(teacher: TeacherRegister):
         cursor = conn.cursor()
         
         hashed_password = hash_password(teacher.password)
-        logger.info(f"Registering teacher: {teacher.username}, password_hash: {hashed_password}")
+        logger.info(f"Registering teacher: {teacher.username}")
         
         cursor.execute(
             "INSERT INTO users (username, password, full_name, email, specialty, role) VALUES (?, ?, ?, ?, ?, ?)",
@@ -219,11 +331,18 @@ async def register_teacher(teacher: TeacherRegister):
 @app.post("/login")
 async def login(login_data: LoginRequest):
     try:
+        logger.info(f"Login attempt: username={login_data.username}")
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         
         hashed_password = hash_password(login_data.password)
-        logger.info(f"Login attempt: username={login_data.username}, password_hash={hashed_password}")
+        logger.info(f"Password hash: {hashed_password}")
+        
+        # دیباگ: نمایش تمام کاربران
+        cursor.execute("SELECT username, email, password FROM users")
+        all_users = cursor.fetchall()
+        logger.info(f"Users in database: {[dict(user) for user in all_users]}")
         
         cursor.execute(
             "SELECT * FROM users WHERE (username = ? OR email = ?) AND password = ?",
@@ -234,7 +353,7 @@ async def login(login_data: LoginRequest):
         conn.close()
         
         if user:
-            logger.info(f"Login successful: {user['username']}")
+            logger.info(f"Login successful for user: {user['username']}")
             return {
                 "success": True,
                 "user": {
