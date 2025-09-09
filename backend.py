@@ -1,4 +1,4 @@
-# backend.py - کامل
+# backend.py - کامل با دیباگ
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -7,8 +7,13 @@ import hashlib
 import os
 from datetime import datetime
 from contextlib import asynccontextmanager
+import logging
 
-# تنظیمات
+# تنظیمات logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# تشخیص محیط
 def get_db_connection():
     if 'RENDER' in os.environ:
         db_path = '/tmp/quran_db.sqlite3'
@@ -40,16 +45,16 @@ class LoginRequest(BaseModel):
 class EnrollmentRequest(BaseModel):
     student_id: int
 
-# توابع کمکی
+# تابع hash کردن password
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
+# ایجاد جداول
 def init_db():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # ایجاد جداول
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,14 +122,17 @@ def init_db():
         
         conn.commit()
         conn.close()
+        logger.info("Database tables created successfully")
         
     except Exception as e:
-        print(f"Database initialization error: {e}")
+        logger.error(f"Database initialization error: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    logger.info("Application startup complete")
     yield
+    logger.info("Application shutdown")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -136,7 +144,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# routes
 @app.get("/")
 async def root():
     return {"message": "Quran App API", "status": "running"}
@@ -152,6 +159,7 @@ async def register_student(student: StudentRegister):
         cursor = conn.cursor()
         
         hashed_password = hash_password(student.password)
+        logger.info(f"Registering student: {student.email}, password_hash: {hashed_password}")
         
         cursor.execute(
             "INSERT INTO users (username, password, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
@@ -173,6 +181,7 @@ async def register_student(student: StudentRegister):
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="Email already exists")
     except Exception as e:
+        logger.error(f"Student registration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/register/teacher")
@@ -182,6 +191,7 @@ async def register_teacher(teacher: TeacherRegister):
         cursor = conn.cursor()
         
         hashed_password = hash_password(teacher.password)
+        logger.info(f"Registering teacher: {teacher.username}, password_hash: {hashed_password}")
         
         cursor.execute(
             "INSERT INTO users (username, password, full_name, email, specialty, role) VALUES (?, ?, ?, ?, ?, ?)",
@@ -203,6 +213,7 @@ async def register_teacher(teacher: TeacherRegister):
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="Username or email already exists")
     except Exception as e:
+        logger.error(f"Teacher registration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/login")
@@ -212,6 +223,7 @@ async def login(login_data: LoginRequest):
         cursor = conn.cursor()
         
         hashed_password = hash_password(login_data.password)
+        logger.info(f"Login attempt: username={login_data.username}, password_hash={hashed_password}")
         
         cursor.execute(
             "SELECT * FROM users WHERE (username = ? OR email = ?) AND password = ?",
@@ -222,6 +234,7 @@ async def login(login_data: LoginRequest):
         conn.close()
         
         if user:
+            logger.info(f"Login successful: {user['username']}")
             return {
                 "success": True,
                 "user": {
@@ -235,9 +248,11 @@ async def login(login_data: LoginRequest):
                 }
             }
         else:
+            logger.warning("Login failed: Invalid credentials")
             raise HTTPException(status_code=401, detail="Invalid credentials")
             
     except Exception as e:
+        logger.error(f"Login error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/courses")
@@ -259,6 +274,7 @@ async def get_courses():
         return {"courses": [dict(course) for course in courses]}
         
     except Exception as e:
+        logger.error(f"Get courses error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/my-courses/{user_id}")
@@ -281,6 +297,7 @@ async def get_my_courses(user_id: int):
         return {"my_courses": [dict(course) for course in courses]}
         
     except Exception as e:
+        logger.error(f"Get my courses error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/enroll/{class_id}")
@@ -289,21 +306,18 @@ async def enroll_student(class_id: int, request: EnrollmentRequest):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # چک کردن وجود کلاس
         cursor.execute("SELECT * FROM classes WHERE id = ? AND status = 'active'", (class_id,))
         class_data = cursor.fetchone()
         
         if not class_data:
             raise HTTPException(status_code=404, detail="Class not found")
         
-        # چک کردن وجود کاربر
         cursor.execute("SELECT * FROM users WHERE id = ? AND role = 'student'", (request.student_id,))
         student = cursor.fetchone()
         
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
         
-        # چک کردن ثبت‌نام تکراری
         cursor.execute(
             "SELECT * FROM enrollments WHERE student_id = ? AND class_id = ?",
             (request.student_id, class_id)
@@ -313,7 +327,6 @@ async def enroll_student(class_id: int, request: EnrollmentRequest):
         if existing:
             raise HTTPException(status_code=400, detail="Already enrolled in this class")
         
-        # ثبت‌نام
         cursor.execute(
             "INSERT INTO enrollments (student_id, class_id, status) VALUES (?, ?, 'active')",
             (request.student_id, class_id)
@@ -325,31 +338,24 @@ async def enroll_student(class_id: int, request: EnrollmentRequest):
         return {"success": True, "message": "Enrollment successful"}
         
     except Exception as e:
+        logger.error(f"Enrollment error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/users/{user_id}")
-async def get_user(user_id: int):
+@app.get("/users")
+async def get_users():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT u.*, s.level as student_level, t.experience as teacher_exp
-            FROM users u
-            LEFT JOIN students s ON u.id = s.user_id
-            LEFT JOIN teachers t ON u.id = t.user_id
-            WHERE u.id = ?
-        """, (user_id,))
+        cursor.execute("SELECT id, username, full_name, email, role, approved FROM users")
+        users = cursor.fetchall()
         
-        user = cursor.fetchone()
         conn.close()
         
-        if user:
-            return {"user": dict(user)}
-        else:
-            raise HTTPException(status_code=404, detail="User not found")
-            
+        return {"users": [dict(user) for user in users]}
+        
     except Exception as e:
+        logger.error(f"Get users error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
