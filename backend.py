@@ -1,4 +1,4 @@
-# backend.py - کامل با رفع مشکل دیتابیس
+# backend.py - کامل با تمام endpointها
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -262,6 +262,60 @@ async def debug_users():
         
         return {"users": [dict(user) for user in users]}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/debug/passwords")
+async def debug_passwords():
+    """Endpoint برای دیباگ پسوردها"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, email, password, role FROM users")
+        users = cursor.fetchall()
+        conn.close()
+        
+        return {"users": [dict(user) for user in users]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/reset-passwords")
+async def reset_passwords():
+    """ریست کردن پسورد همه کاربران به مقدار پیش‌فرض"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # پسوردهای پیش‌فرض
+        default_passwords = {
+            "admin@quran.com": "admin123",
+            "teacher1": "teacher123", 
+            "student1@quran.com": "student123",
+            "student2@quran.com": "student123",
+            "testuser@example.com": "simplepassword"
+        }
+        
+        updated_count = 0
+        for username, password in default_passwords.items():
+            hashed_password = hash_password(password)
+            cursor.execute(
+                "UPDATE users SET password = ? WHERE username = ?",
+                (hashed_password, username)
+            )
+            if cursor.rowcount > 0:
+                updated_count += 1
+                logger.info(f"Reset password for {username}")
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True, 
+            "message": f"Passwords reset successfully for {updated_count} users",
+            "updated_count": updated_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Password reset error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/register/student")
