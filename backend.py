@@ -24,6 +24,17 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+# تابع کمکی برای تبدیل Row به Dictionary
+def row_to_dict(row):
+    """تبدیل sqlite3.Row به dictionary"""
+    if row is None:
+        return None
+    return dict(row)
+
+def rows_to_dict_list(rows):
+    """تبدیل لیست sqlite3.Row به لیست dictionary"""
+    return [dict(row) for row in rows] if rows else []
+
 # مدل‌های داده
 class StudentRegister(BaseModel):
     name: str
@@ -123,7 +134,8 @@ def init_db():
         
         # اضافه کردن داده‌های تست اگر وجود ندارند
         cursor.execute("SELECT COUNT(*) as count FROM users")
-        user_count = cursor.fetchone()['count']
+        result = cursor.fetchone()
+        user_count = row_to_dict(result)['count'] if result else 0
         
         if user_count == 0:
             logger.info("Adding test data to database...")
@@ -163,7 +175,7 @@ def init_db():
             cursor.execute("SELECT id FROM users WHERE username = 'teacher1'")
             teacher_result = cursor.fetchone()
             if teacher_result:
-                teacher_id = teacher_result['id']
+                teacher_id = row_to_dict(teacher_result)['id']
                 
                 test_classes = [
                     (teacher_id, 'Basic Quran Reading', 'Learn to read Quran from basics', 'Beginner', 'Recitation', 60, 0, 20, 'Mon, Wed, Fri 10:00-11:00'),
@@ -184,8 +196,8 @@ def init_db():
                 student2_result = cursor.fetchone()
                 
                 if student1_result and student2_result:
-                    student1_id = student1_result['id']
-                    student2_id = student2_result['id']
+                    student1_id = row_to_dict(student1_result)['id']
+                    student2_id = row_to_dict(student2_result)['id']
                     
                     test_enrollments = [
                         (student1_id, 1, 25),
@@ -238,7 +250,8 @@ async def health_check():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) as user_count FROM users")
-        user_count = cursor.fetchone()['user_count']
+        result = cursor.fetchone()
+        user_count = row_to_dict(result)['user_count'] if result else 0
         conn.close()
         
         return {
@@ -260,7 +273,7 @@ async def debug_users():
         users = cursor.fetchall()
         conn.close()
         
-        return {"users": [dict(user) for user in users]}
+        return {"users": rows_to_dict_list(users)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -274,7 +287,7 @@ async def debug_passwords():
         users = cursor.fetchall()
         conn.close()
         
-        return {"users": [dict(user) for user in users]}
+        return {"users": rows_to_dict_list(users)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -396,7 +409,7 @@ async def login(login_data: LoginRequest):
         # دیباگ: نمایش تمام کاربران
         cursor.execute("SELECT username, email, password FROM users")
         all_users = cursor.fetchall()
-        logger.info(f"Users in database: {[dict(user) for user in all_users]}")
+        logger.info(f"Users in database: {rows_to_dict_list(all_users)}")
         
         cursor.execute(
             "SELECT * FROM users WHERE (username = ? OR email = ?) AND password = ?",
@@ -407,17 +420,18 @@ async def login(login_data: LoginRequest):
         conn.close()
         
         if user:
-            logger.info(f"Login successful for user: {user['username']}")
+            user_dict = row_to_dict(user)
+            logger.info(f"Login successful for user: {user_dict['username']}")
             return {
                 "success": True,
                 "user": {
-                    "id": user['id'],
-                    "username": user['username'],
-                    "full_name": user['full_name'],
-                    "email": user['email'],
-                    "role": user['role'],
-                    "specialty": user.get('specialty', ''),
-                    "approved": bool(user['approved'])
+                    "id": user_dict['id'],
+                    "username": user_dict['username'],
+                    "full_name": user_dict['full_name'],
+                    "email": user_dict['email'],
+                    "role": user_dict['role'],
+                    "specialty": user_dict.get('specialty', ''),
+                    "approved": bool(user_dict['approved'])
                 }
             }
         else:
@@ -444,7 +458,7 @@ async def get_courses():
         courses = cursor.fetchall()
         conn.close()
         
-        return {"courses": [dict(course) for course in courses]}
+        return {"courses": rows_to_dict_list(courses)}
         
     except Exception as e:
         logger.error(f"Get courses error: {e}")
@@ -467,7 +481,7 @@ async def get_my_courses(user_id: int):
         courses = cursor.fetchall()
         conn.close()
         
-        return {"my_courses": [dict(course) for course in courses]}
+        return {"my_courses": rows_to_dict_list(courses)}
         
     except Exception as e:
         logger.error(f"Get my courses error: {e}")
@@ -525,7 +539,7 @@ async def get_users():
         
         conn.close()
         
-        return {"users": [dict(user) for user in users]}
+        return {"users": rows_to_dict_list(users)}
         
     except Exception as e:
         logger.error(f"Get users error: {e}")
