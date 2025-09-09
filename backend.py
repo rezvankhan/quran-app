@@ -1,7 +1,8 @@
-# backend.py - کامل با تمام endpointها
+# backend.py - کامل با endpoint جدید
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import sqlite3
 import hashlib
 import os
@@ -55,6 +56,16 @@ class LoginRequest(BaseModel):
 
 class EnrollmentRequest(BaseModel):
     student_id: int
+
+class CourseCreate(BaseModel):
+    title: str
+    description: str
+    level: str = "Beginner"
+    category: str
+    duration: int = 60
+    price: float = 0
+    max_students: int = 10
+    schedule: str
 
 # تابع hash کردن password
 def hash_password(password: str) -> str:
@@ -543,6 +554,73 @@ async def get_users():
         
     except Exception as e:
         logger.error(f"Get users error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# endpoint جدید برای ایجاد دوره توسط معلم
+@app.post("/teacher/courses")
+async def create_course(course_data: CourseCreate):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # برای تست از teacher_id=2 استفاده می‌کنیم (teacher1)
+        # در واقعیت باید از authentication استفاده شود
+        teacher_id = 2
+        
+        cursor.execute(
+            """
+            INSERT INTO classes (teacher_id, title, description, level, category, duration, price, max_students, schedule)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                teacher_id,
+                course_data.title,
+                course_data.description,
+                course_data.level,
+                course_data.category,
+                course_data.duration,
+                course_data.price,
+                course_data.max_students,
+                course_data.schedule
+            )
+        )
+        
+        conn.commit()
+        course_id = cursor.lastrowid
+        conn.close()
+        
+        return {
+            "success": True, 
+            "course_id": course_id, 
+            "message": "Course created successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating course: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating course: {str(e)}")
+
+# endpoint جدید برای دریافت دوره‌های معلم
+@app.get("/teacher/{teacher_id}/courses")
+async def get_teacher_courses(teacher_id: int):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT c.*, COUNT(e.id) as enrolled_students
+            FROM classes c
+            LEFT JOIN enrollments e ON c.id = e.class_id
+            WHERE c.teacher_id = ?
+            GROUP BY c.id
+        """, (teacher_id,))
+        
+        courses = cursor.fetchall()
+        conn.close()
+        
+        return {"courses": rows_to_dict_list(courses)}
+        
+    except Exception as e:
+        logger.error(f"Get teacher courses error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
