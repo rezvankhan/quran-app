@@ -169,25 +169,25 @@ class QuranApp(toga.App):
         content_box.add(toga.Button(
             "📚 My Courses", 
             on_press=self.show_student_courses,
-            style=Pack(padding=15, margin=5, width=200, background_color="#2196F3", color="white")
+            style=Pack(padding=15, width=200, background_color="#2196F3", color="white")
         ))
         
         content_box.add(toga.Button(
             "📊 My Progress", 
             on_press=self.show_student_progress,
-            style=Pack(padding=15, margin=5, width=200, background_color="#4CAF50", color="white")
+            style=Pack(padding=15, width=200, background_color="#4CAF50", color="white")
         ))
         
         content_box.add(toga.Button(
             "👨‍🏫 Find Teachers", 
             on_press=self.find_teachers,
-            style=Pack(padding=15, margin=5, width=200, background_color="#FF9800", color="white")
+            style=Pack(padding=15, width=200, background_color="#FF9800", color="white")
         ))
         
         content_box.add(toga.Button(
             "📅 My Schedule", 
             on_press=self.show_student_schedule,
-            style=Pack(padding=15, margin=5, width=200, background_color="#9C27B0", color="white")
+            style=Pack(padding=15, width=200, background_color="#9C27B0", color="white")
         ))
         
         main_box.add(header_box)
@@ -220,25 +220,25 @@ class QuranApp(toga.App):
         content_box.add(toga.Button(
             "📖 My Classes", 
             on_press=self.show_teacher_classes,
-            style=Pack(padding=15, margin=5, width=200, background_color="#2196F3", color="white")
+            style=Pack(padding=15, width=200, background_color="#2196F3", color="white")
         ))
         
         content_box.add(toga.Button(
             "➕ Create Class", 
             on_press=self.create_class,
-            style=Pack(padding=15, margin=5, width=200, background_color="#4CAF50", color="white")
+            style=Pack(padding=15, width=200, background_color="#4CAF50", color="white")
         ))
         
         content_box.add(toga.Button(
             "👥 My Students", 
             on_press=self.show_teacher_students,
-            style=Pack(padding=15, margin=5, width=200, background_color="#FF9800", color="white")
+            style=Pack(padding=15, width=200, background_color="#FF9800", color="white")
         ))
         
         content_box.add(toga.Button(
             "📈 Statistics", 
             on_press=self.show_teacher_stats,
-            style=Pack(padding=15, margin=5, width=200, background_color="#9C27B0", color="white")
+            style=Pack(padding=15, width=200, background_color="#9C27B0", color="white")
         ))
         
         main_box.add(header_box)
@@ -265,7 +265,7 @@ class QuranApp(toga.App):
                 
                 if courses:
                     for course in courses:
-                        course_box = toga.Box(style=Pack(direction=COLUMN, padding=10, background_color="#f5f5f5", margin=5))
+                        course_box = toga.Box(style=Pack(direction=COLUMN, padding=10, background_color="#f5f5f5"))
                         course_box.add(toga.Label(course["title"], style=Pack(font_weight="bold")))
                         course_box.add(toga.Label(f"Teacher: {course['teacher_name']}", style=Pack(font_size=12)))
                         course_box.add(toga.Label(f"Level: {course['level']}", style=Pack(font_size=12)))
@@ -276,31 +276,31 @@ class QuranApp(toga.App):
                 
                 self.main_window.content = main_box
             else:
-                self.main_window.error_dialog("Error", "Failed to load courses")
+                toga.app.dialog.error("Error", "Failed to load courses")
                 
         except Exception as e:
-            self.main_window.error_dialog("Error", f"Failed to load courses: {str(e)}")
+            toga.app.dialog.error("Error", f"Failed to load courses: {str(e)}")
 
     def show_student_progress(self, widget):
-        self.main_window.info_dialog("Progress", "Your progress report will appear here")
+        toga.app.dialog.info("Progress", "Your progress report will appear here")
 
     def find_teachers(self, widget):
-        self.main_window.info_dialog("Find Teachers", "Available teachers list will appear here")
+        toga.app.dialog.info("Find Teachers", "Available teachers list will appear here")
 
     def show_student_schedule(self, widget):
-        self.main_window.info_dialog("Schedule", "Your class schedule will appear here")
+        toga.app.dialog.info("Schedule", "Your class schedule will appear here")
 
     def show_teacher_classes(self, widget):
-        self.main_window.info_dialog("My Classes", "List of your teaching classes will appear here")
+        toga.app.dialog.info("My Classes", "List of your teaching classes will appear here")
 
     def create_class(self, widget):
-        self.main_window.info_dialog("Create Class", "Class creation form will appear here")
+        toga.app.dialog.info("Create Class", "Class creation form will appear here")
 
     def show_teacher_students(self, widget):
-        self.main_window.info_dialog("My Students", "List of your students will appear here")
+        toga.app.dialog.info("My Students", "List of your students will appear here")
 
     def show_teacher_stats(self, widget):
-        self.main_window.info_dialog("Statistics", "Teaching statistics will appear here")
+        toga.app.dialog.info("Statistics", "Teaching statistics will appear here")
 
     def login(self, widget):
         try:
@@ -308,7 +308,7 @@ class QuranApp(toga.App):
             password = self.password_input.value
             
             if not identifier or not password:
-                self.main_window.error_dialog("Error", "Please enter both username/email and password")
+                toga.app.dialog.error("Error", "Please enter both username/email and password")
                 return
             
             response = requests.post(
@@ -330,21 +330,21 @@ class QuranApp(toga.App):
                 elif self.user_role == 'teacher':
                     self.show_teacher_dashboard(self.current_user)
                 else:
-                    self.main_window.info_dialog("Success", f"Login successful! Welcome {self.current_user['full_name']}")
+                    toga.app.dialog.info("Success", f"Login successful! Welcome {self.current_user['full_name']}")
                     
             else:
                 error_msg = response.json().get("detail", "Login failed")
-                self.main_window.error_dialog("Error", f"Login failed: {error_msg}")
+                toga.app.dialog.error("Error", f"Login failed: {error_msg}")
                 
         except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+            toga.app.dialog.error("Error", f"Connection error: {str(e)}")
 
     def logout(self, widget):
         self.current_user = None
         self.user_token = None
         self.user_role = None
         self.show_login_screen()
-        self.main_window.info_dialog("Info", "Logged out successfully")
+        toga.app.dialog.info("Info", "Logged out successfully")
 
     def register_student(self, widget):
         try:
@@ -354,7 +354,7 @@ class QuranApp(toga.App):
             level = self.level_input.value
             
             if not all([name, email, password, level]):
-                self.main_window.error_dialog("Error", "Please fill all fields")
+                toga.app.dialog.error("Error", "Please fill all fields")
                 return
             
             response = requests.post(
@@ -365,14 +365,14 @@ class QuranApp(toga.App):
             )
             
             if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Student registration successful! Please login with your email.")
+                toga.app.dialog.info("Success", "Student registration successful! Please login with your email.")
                 self.show_login_screen()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
+                toga.app.dialog.error("Error", f"Registration failed: {error_msg}")
                 
         except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+            toga.app.dialog.error("Error", f"Connection error: {str(e)}")
 
     def register_teacher(self, widget):
         try:
@@ -383,7 +383,7 @@ class QuranApp(toga.App):
             specialty = self.teacher_specialty.value.strip()
             
             if not all([username, password, full_name, email, specialty]):
-                self.main_window.error_dialog("Error", "Please fill all fields")
+                toga.app.dialog.error("Error", "Please fill all fields")
                 return
             
             response = requests.post(
@@ -397,14 +397,14 @@ class QuranApp(toga.App):
             )
             
             if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Teacher registration successful! Please login with your username.")
+                toga.app.dialog.info("Success", "Teacher registration successful! Please login with your username.")
                 self.show_login_screen()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
+                toga.app.dialog.error("Error", f"Registration failed: {error_msg}")
                 
         except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+            toga.app.dialog.error("Error", f"Connection error: {str(e)}")
 
 def main():
     return QuranApp()
