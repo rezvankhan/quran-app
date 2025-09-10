@@ -1,4 +1,4 @@
-# Frontend-toga.py - کامل (نسخه حرفه‌ای با تب)
+# Frontend-toga.py - کامل (نسخه ساده‌شده)
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -18,288 +18,135 @@ class QuranApp(toga.App):
         self.main_window.show()
     
     def show_login_screen(self, widget=None):
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=10))
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
-        # هدر برنامه
-        header_box = toga.Box(style=Pack(direction=ROW, padding=10, background_color="#2E7D32"))
         title_label = toga.Label(
             "📖 Quran Academy",
-            style=Pack(color="white", font_size=20, font_weight="bold", padding=10)
-        )
-        header_box.add(title_label)
-        main_box.add(header_box)
-        
-        # ایجاد تب‌ها با Box به جای OptionContainer
-        tab_container = toga.Box(style=Pack(direction=COLUMN, flex=1))
-        
-        # دکمه‌های تب
-        tab_buttons_box = toga.Box(style=Pack(direction=ROW, padding=5, background_color="#f0f0f0"))
-        
-        login_tab_btn = toga.Button(
-            "🔐 Login",
-            on_press=lambda w: self.show_tab(0),
-            style=Pack(flex=1, padding=10, background_color="#2E7D32", color="white")
+            style=Pack(text_align=CENTER, font_size=24, font_weight="bold", padding=20, color="#0D8E3D")
         )
         
-        register_tab_btn = toga.Button(
-            "🚀 Register",
-            on_press=lambda w: self.show_tab(1),
-            style=Pack(flex=1, padding=10, background_color="#666", color="white")
-        )
-        
-        tab_buttons_box.add(login_tab_btn)
-        tab_buttons_box.add(register_tab_btn)
-        
-        # محتوای تب‌ها
-        self.tab_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
-        
-        # تب LOGIN
-        self.login_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
-        
-        self.login_box.add(toga.Label(
-            "Login to Your Account",
-            style=Pack(text_align=CENTER, font_size=18, font_weight="bold", padding=20, color="#2E7D32")
-        ))
-        
-        self.login_username = toga.TextInput(
+        self.username_input = toga.TextInput(
             placeholder="Username (Teachers) or Email (Students)",
-            style=Pack(padding=10, flex=1)
+            style=Pack(padding=10, width=300)
         )
         
-        self.login_password = toga.PasswordInput(
+        self.password_input = toga.PasswordInput(
             placeholder="Password", 
-            style=Pack(padding=10, flex=1)
+            style=Pack(padding=10, width=300)
         )
         
         login_btn = toga.Button(
             "🔐 Login",
             on_press=self.login,
-            style=Pack(padding=15, background_color="#2E7D32", color="white", width=200)
+            style=Pack(padding=15, background_color="#0D8E3D", color="white", width=200)
         )
         
-        login_help = toga.Label(
+        # دکمه‌های ثبت نام
+        register_box = toga.Box(style=Pack(direction=COLUMN, padding=10, alignment=CENTER))
+        
+        register_student_btn = toga.Button(
+            "👨‍🎓 Register as Student",
+            on_press=self.show_register_student,
+            style=Pack(padding=12, background_color="#2196F3", color="white", width=200)
+        )
+        
+        register_teacher_btn = toga.Button(
+            "👨‍🏫 Register as Teacher",
+            on_press=self.show_register_teacher,
+            style=Pack(padding=12, background_color="#FF9800", color="white", width=200)
+        )
+        
+        help_label = toga.Label(
             "Note: Students login with email, Teachers with username",
             style=Pack(text_align=CENTER, font_size=10, color="gray", padding=10)
         )
         
-        self.login_box.add(self.login_username)
-        self.login_box.add(self.login_password)
-        self.login_box.add(login_btn)
-        self.login_box.add(login_help)
+        main_box.add(title_label)
+        main_box.add(self.username_input)
+        main_box.add(self.password_input)
+        main_box.add(login_btn)
+        register_box.add(register_student_btn)
+        register_box.add(register_teacher_btn)
+        main_box.add(register_box)
+        main_box.add(help_label)
         
-        # تب REGISTER
-        self.register_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
-        self.register_box.visible = False  # ابتدا مخفی
+        self.main_window.content = main_box
+
+    def show_register_student(self, widget):
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
-        self.register_box.add(toga.Label(
-            "Create New Account",
-            style=Pack(text_align=CENTER, font_size=18, font_weight="bold", padding=20, color="#1565C0")
-        ))
-        
-        self.reg_type = toga.Selection(
-            items=["Select Account Type", "Student", "Teacher"],
-            style=Pack(padding=10, width=250)
+        title_label = toga.Label(
+            "👨‍🎓 Register Student",
+            style=Pack(text_align=CENTER, font_size=20, font_weight="bold", padding=10, color="#2196F3")
         )
         
-        self.reg_fullname = toga.TextInput(
-            placeholder="Full Name",
-            style=Pack(padding=10)
-        )
-        
-        self.reg_email = toga.TextInput(
-            placeholder="Email Address",
-            style=Pack(padding=10)
-        )
-        
-        self.reg_username = toga.TextInput(
-            placeholder="Username (for Teachers)",
-            style=Pack(padding=10)
-        )
-        
-        self.reg_password = toga.PasswordInput(
-            placeholder="Password",
-            style=Pack(padding=10)
-        )
-        
-        self.reg_specialty = toga.TextInput(
-            placeholder="Specialty (for Teachers)",
-            style=Pack(padding=10)
-        )
-        
-        self.reg_level = toga.Selection(
+        self.name_input = toga.TextInput(placeholder="Full Name", style=Pack(padding=10, width=300))
+        self.email_input = toga.TextInput(placeholder="Email", style=Pack(padding=10, width=300))
+        self.password_input = toga.PasswordInput(placeholder="Password", style=Pack(padding=10, width=300))
+        self.level_input = toga.Selection(
             items=["Beginner", "Intermediate", "Advanced"],
-            style=Pack(padding=10)
+            style=Pack(padding=10, width=300)
         )
         
         register_btn = toga.Button(
-            "🚀 Create Account",
-            on_press=self.handle_registration,
-            style=Pack(padding=15, background_color="#1565C0", color="white", width=200)
+            "🚀 Register",
+            on_press=self.register_student,
+            style=Pack(padding=15, background_color="#2196F3", color="white", width=200)
         )
         
-        # ابتدا فیلدها را مخفی می‌کنیم
-        self.reg_fullname.visible = False
-        self.reg_email.visible = False
-        self.reg_username.visible = False
-        self.reg_password.visible = False
-        self.reg_specialty.visible = False
-        self.reg_level.visible = False
-        register_btn.visible = False
+        back_btn = toga.Button(
+            "⬅ Back",
+            on_press=self.show_login_screen,
+            style=Pack(padding=10, background_color="#f44336", color="white", width=150)
+        )
         
-        self.register_box.add(self.reg_type)
-        self.register_box.add(self.reg_fullname)
-        self.register_box.add(self.reg_email)
-        self.register_box.add(self.reg_username)
-        self.register_box.add(self.reg_password)
-        self.register_box.add(self.reg_specialty)
-        self.register_box.add(self.reg_level)
-        self.register_box.add(register_btn)
-        
-        # اضافه کردن محتوا به container
-        self.tab_content.add(self.login_box)
-        self.tab_content.add(self.register_box)
-        
-        tab_container.add(tab_buttons_box)
-        tab_container.add(self.tab_content)
-        
-        main_box.add(tab_container)
-        
-        # رویداد تغییر نوع ثبت نام
-        self.reg_type.on_change = self.on_reg_type_change
-        
-        # ذخیره reference دکمه‌ها برای تغییر رنگ
-        self.login_tab_btn = login_tab_btn
-        self.register_tab_btn = register_tab_btn
+        main_box.add(title_label)
+        main_box.add(self.name_input)
+        main_box.add(self.email_input)
+        main_box.add(self.password_input)
+        main_box.add(self.level_input)
+        main_box.add(register_btn)
+        main_box.add(back_btn)
         
         self.main_window.content = main_box
-    
-    def show_tab(self, tab_index):
-        # نمایش تب انتخاب شده و مخفی کردن بقیه
-        if tab_index == 0:
-            self.login_box.visible = True
-            self.register_box.visible = False
-            self.login_tab_btn.style.background_color = "#2E7D32"
-            self.register_tab_btn.style.background_color = "#666"
-        else:
-            self.login_box.visible = False
-            self.register_box.visible = True
-            self.login_tab_btn.style.background_color = "#666"
-            self.register_tab_btn.style.background_color = "#1565C0"
-    
-    def on_reg_type_change(self, widget):
-        # نمایش فیلدهای مناسب بر اساس نوع کاربر
-        is_teacher = self.reg_type.value == "Teacher"
-        is_student = self.reg_type.value == "Student"
-        is_selected = is_teacher or is_student
-        
-        self.reg_fullname.visible = is_selected
-        self.reg_email.visible = is_selected
-        self.reg_password.visible = is_selected
-        self.reg_username.visible = is_teacher
-        self.reg_specialty.visible = is_teacher
-        self.reg_level.visible = is_student
-        
-        # پیدا کردن دکمه ثبت نام
-        for child in self.register_box.children:
-            if isinstance(child, toga.Button):
-                child.visible = is_selected
-    
-    def handle_registration(self, widget):
-        account_type = self.reg_type.value
-        
-        if account_type == "Student":
-            self.register_student(widget)
-        elif account_type == "Teacher":
-            self.register_teacher(widget)
-        else:
-            self.main_window.info_dialog("Info", "Please select an account type")
-    
-    def register_student(self, widget):
-        try:
-            name = self.reg_fullname.value.strip()
-            email = self.reg_email.value.strip()
-            password = self.reg_password.value
-            level = self.reg_level.value
-            
-            if not all([name, email, password, level]):
-                self.main_window.error_dialog("Error", "Please fill all required fields")
-                return
-            
-            response = requests.post(
-                "https://quran-app-kw38.onrender.com/register/student",
-                json={"name": name, "email": email, "password": password, "level": level},
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Student account created successfully! Please login with your email.")
-                self.show_tab(0)  # بازگشت به تب Login
-                self.clear_registration_form()
-            else:
-                error_msg = response.json().get("detail", "Registration failed")
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
-                
-        except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
-    
-    def register_teacher(self, widget):
-        try:
-            username = self.reg_username.value.strip()
-            password = self.reg_password.value
-            full_name = self.reg_fullname.value.strip()
-            email = self.reg_email.value.strip()
-            specialty = self.reg_specialty.value.strip()
-            
-            if not all([username, password, full_name, email, specialty]):
-                self.main_window.error_dialog("Error", "Please fill all required fields")
-                return
-            
-            response = requests.post(
-                "https://quran-app-kw38.onrender.com/register/teacher",
-                json={
-                    "username": username, "password": password, 
-                    "full_name": full_name, "email": email, "specialty": specialty
-                },
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Teacher account created successfully! Please login with your username.")
-                self.show_tab(0)  # بازگشت به تب Login
-                self.clear_registration_form()
-            else:
-                error_msg = response.json().get("detail", "Registration failed")
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
-                
-        except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
-    
-    def clear_registration_form(self):
-        # پاک کردن تمام فیلدهای فرم
-        self.reg_type.value = "Select Account Type"
-        self.reg_fullname.value = ""
-        self.reg_email.value = ""
-        self.reg_username.value = ""
-        self.reg_password.value = ""
-        self.reg_specialty.value = ""
-        self.reg_level.value = "Beginner"
-        
-        # مخفی کردن فیلدها
-        self.reg_fullname.visible = False
-        self.reg_email.visible = False
-        self.reg_username.visible = False
-        self.reg_password.visible = False
-        self.reg_specialty.visible = False
-        self.reg_level.visible = False
-        
-        # مخفی کردن دکمه
-        for child in self.register_box.children:
-            if isinstance(child, toga.Button):
-                child.visible = False
 
-    # بقیه توابع بدون تغییر می‌مانند...
+    def show_register_teacher(self, widget):
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
+        
+        title_label = toga.Label(
+            "👨‍🏫 Register Teacher",
+            style=Pack(text_align=CENTER, font_size=20, font_weight="bold", padding=10, color="#FF9800")
+        )
+        
+        self.teacher_username = toga.TextInput(placeholder="Username", style=Pack(padding=10, width=300))
+        self.teacher_password = toga.PasswordInput(placeholder="Password", style=Pack(padding=10, width=300))
+        self.teacher_name = toga.TextInput(placeholder="Full Name", style=Pack(padding=10, width=300))
+        self.teacher_email = toga.TextInput(placeholder="Email", style=Pack(padding=10, width=300))
+        self.teacher_specialty = toga.TextInput(placeholder="Specialty", style=Pack(padding=10, width=300))
+        
+        register_btn = toga.Button(
+            "🚀 Register",
+            on_press=self.register_teacher,
+            style=Pack(padding=15, background_color="#FF9800", color="white", width=200)
+        )
+        
+        back_btn = toga.Button(
+            "⬅ Back",
+            on_press=self.show_login_screen,
+            style=Pack(padding=10, background_color="#f44336", color="white", width=150)
+        )
+        
+        main_box.add(title_label)
+        main_box.add(self.teacher_username)
+        main_box.add(self.teacher_password)
+        main_box.add(self.teacher_name)
+        main_box.add(self.teacher_email)
+        main_box.add(self.teacher_specialty)
+        main_box.add(register_btn)
+        main_box.add(back_btn)
+        
+        self.main_window.content = main_box
+
     def show_teacher_dashboard(self, user_data):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
         
@@ -428,8 +275,8 @@ class QuranApp(toga.App):
 
     def login(self, widget):
         try:
-            identifier = self.login_username.value.strip()
-            password = self.login_password.value
+            identifier = self.username_input.value.strip()
+            password = self.password_input.value
             
             if not identifier or not password:
                 self.main_window.error_dialog("Error", "Please enter both username/email and password")
@@ -469,6 +316,66 @@ class QuranApp(toga.App):
         self.user_role = None
         self.show_login_screen()
         self.main_window.info_dialog("Info", "Logged out successfully")
+
+    def register_student(self, widget):
+        try:
+            name = self.name_input.value.strip()
+            email = self.email_input.value.strip()
+            password = self.password_input.value
+            level = self.level_input.value
+            
+            if not all([name, email, password, level]):
+                self.main_window.error_dialog("Error", "Please fill all fields")
+                return
+            
+            response = requests.post(
+                "https://quran-app-kw38.onrender.com/register/student",
+                json={"name": name, "email": email, "password": password, "level": level},
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                self.main_window.info_dialog("Success", "Student registration successful! Please login with your email.")
+                self.show_login_screen()
+            else:
+                error_msg = response.json().get("detail", "Registration failed")
+                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
+                
+        except Exception as e:
+            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+
+    def register_teacher(self, widget):
+        try:
+            username = self.teacher_username.value.strip()
+            password = self.teacher_password.value
+            full_name = self.teacher_name.value.strip()
+            email = self.teacher_email.value.strip()
+            specialty = self.teacher_specialty.value.strip()
+            
+            if not all([username, password, full_name, email, specialty]):
+                self.main_window.error_dialog("Error", "Please fill all fields")
+                return
+            
+            response = requests.post(
+                "https://quran-app-kw38.onrender.com/register/teacher",
+                json={
+                    "username": username, "password": password, 
+                    "full_name": full_name, "email": email, "specialty": specialty
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                self.main_window.info_dialog("Success", "Teacher registration successful! Please login with your username.")
+                self.show_login_screen()
+            else:
+                error_msg = response.json().get("detail", "Registration failed")
+                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
+                
+        except Exception as e:
+            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
 
     def show_student_courses(self, widget):
         self.main_window.info_dialog("My Courses", "List of your courses will appear here")
