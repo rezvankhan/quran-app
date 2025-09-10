@@ -1,4 +1,4 @@
-# Frontend-toga.py - کامل (نسخه ساده‌شده)
+# Frontend-toga.py - کامل
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -41,7 +41,6 @@ class QuranApp(toga.App):
             style=Pack(padding=15, background_color="#0D8E3D", color="white", width=200)
         )
         
-        # دکمه‌های ثبت نام
         register_box = toga.Box(style=Pack(direction=COLUMN, padding=10, alignment=CENTER))
         
         register_student_btn = toga.Button(
@@ -170,7 +169,6 @@ class QuranApp(toga.App):
         info_box.add(toga.Label(f"🎯 Specialty: {user_data.get('specialty', 'General')}", style=Pack(padding=5)))
         content_box.add(info_box)
         
-        # Quran Course Types ComboBox
         quran_types_label = toga.Label(
             "Select Quran Course Type:",
             style=Pack(padding=10, font_weight="bold")
