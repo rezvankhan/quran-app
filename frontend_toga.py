@@ -29,13 +29,34 @@ class QuranApp(toga.App):
         header_box.add(title_label)
         main_box.add(header_box)
         
-        # تب‌های اصلی
-        self.tab_view = toga.OptionContainer(style=Pack(flex=1))
+        # ایجاد تب‌ها با Box به جای OptionContainer
+        tab_container = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        
+        # دکمه‌های تب
+        tab_buttons_box = toga.Box(style=Pack(direction=ROW, padding=5, background_color="#f0f0f0"))
+        
+        login_tab_btn = toga.Button(
+            "🔐 Login",
+            on_press=lambda w: self.show_tab(0),
+            style=Pack(flex=1, padding=10, background_color="#2E7D32", color="white")
+        )
+        
+        register_tab_btn = toga.Button(
+            "🚀 Register",
+            on_press=lambda w: self.show_tab(1),
+            style=Pack(flex=1, padding=10, background_color="#666", color="white")
+        )
+        
+        tab_buttons_box.add(login_tab_btn)
+        tab_buttons_box.add(register_tab_btn)
+        
+        # محتوای تب‌ها
+        self.tab_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
         
         # تب LOGIN
-        login_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
+        self.login_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
-        login_box.add(toga.Label(
+        self.login_box.add(toga.Label(
             "Login to Your Account",
             style=Pack(text_align=CENTER, font_size=18, font_weight="bold", padding=20, color="#2E7D32")
         ))
@@ -61,15 +82,16 @@ class QuranApp(toga.App):
             style=Pack(text_align=CENTER, font_size=10, color="gray", padding=10)
         )
         
-        login_box.add(self.login_username)
-        login_box.add(self.login_password)
-        login_box.add(login_btn)
-        login_box.add(login_help)
+        self.login_box.add(self.login_username)
+        self.login_box.add(self.login_password)
+        self.login_box.add(login_btn)
+        self.login_box.add(login_help)
         
         # تب REGISTER
-        register_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
+        self.register_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
+        self.register_box.visible = False  # ابتدا مخفی
         
-        register_box.add(toga.Label(
+        self.register_box.add(toga.Label(
             "Create New Account",
             style=Pack(text_align=CENTER, font_size=18, font_weight="bold", padding=20, color="#1565C0")
         ))
@@ -124,25 +146,45 @@ class QuranApp(toga.App):
         self.reg_level.visible = False
         register_btn.visible = False
         
-        register_box.add(self.reg_type)
-        register_box.add(self.reg_fullname)
-        register_box.add(self.reg_email)
-        register_box.add(self.reg_username)
-        register_box.add(self.reg_password)
-        register_box.add(self.reg_specialty)
-        register_box.add(self.reg_level)
-        register_box.add(register_btn)
+        self.register_box.add(self.reg_type)
+        self.register_box.add(self.reg_fullname)
+        self.register_box.add(self.reg_email)
+        self.register_box.add(self.reg_username)
+        self.register_box.add(self.reg_password)
+        self.register_box.add(self.reg_specialty)
+        self.register_box.add(self.reg_level)
+        self.register_box.add(register_btn)
         
-        # اضافه کردن تب‌ها
-        self.tab_view.add("🔐 Login", login_box)
-        self.tab_view.add("🚀 Register", register_box)
+        # اضافه کردن محتوا به container
+        self.tab_content.add(self.login_box)
+        self.tab_content.add(self.register_box)
         
-        main_box.add(self.tab_view)
+        tab_container.add(tab_buttons_box)
+        tab_container.add(self.tab_content)
+        
+        main_box.add(tab_container)
         
         # رویداد تغییر نوع ثبت نام
         self.reg_type.on_change = self.on_reg_type_change
         
+        # ذخیره reference دکمه‌ها برای تغییر رنگ
+        self.login_tab_btn = login_tab_btn
+        self.register_tab_btn = register_tab_btn
+        
         self.main_window.content = main_box
+    
+    def show_tab(self, tab_index):
+        # نمایش تب انتخاب شده و مخفی کردن بقیه
+        if tab_index == 0:
+            self.login_box.visible = True
+            self.register_box.visible = False
+            self.login_tab_btn.style.background_color = "#2E7D32"
+            self.register_tab_btn.style.background_color = "#666"
+        else:
+            self.login_box.visible = False
+            self.register_box.visible = True
+            self.login_tab_btn.style.background_color = "#666"
+            self.register_tab_btn.style.background_color = "#1565C0"
     
     def on_reg_type_change(self, widget):
         # نمایش فیلدهای مناسب بر اساس نوع کاربر
@@ -157,8 +199,10 @@ class QuranApp(toga.App):
         self.reg_specialty.visible = is_teacher
         self.reg_level.visible = is_student
         
-        register_btn = widget.parent.children[-1]  # آخرین فرزند که دکمه ثبت نام است
-        register_btn.visible = is_selected
+        # پیدا کردن دکمه ثبت نام
+        for child in self.register_box.children:
+            if isinstance(child, toga.Button):
+                child.visible = is_selected
     
     def handle_registration(self, widget):
         account_type = self.reg_type.value
@@ -190,7 +234,7 @@ class QuranApp(toga.App):
             
             if response.status_code == 200:
                 self.main_window.info_dialog("Success", "Student account created successfully! Please login with your email.")
-                self.tab_view.content = 0  # بازگشت به تب Login
+                self.show_tab(0)  # بازگشت به تب Login
                 self.clear_registration_form()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
@@ -223,7 +267,7 @@ class QuranApp(toga.App):
             
             if response.status_code == 200:
                 self.main_window.info_dialog("Success", "Teacher account created successfully! Please login with your username.")
-                self.tab_view.content = 0  # بازگشت به تب Login
+                self.show_tab(0)  # بازگشت به تب Login
                 self.clear_registration_form()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
@@ -251,10 +295,11 @@ class QuranApp(toga.App):
         self.reg_level.visible = False
         
         # مخفی کردن دکمه
-        for child in self.reg_level.parent.children:
+        for child in self.register_box.children:
             if isinstance(child, toga.Button):
                 child.visible = False
 
+    # بقیه توابع بدون تغییر می‌مانند...
     def show_teacher_dashboard(self, user_data):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
         
@@ -425,7 +470,6 @@ class QuranApp(toga.App):
         self.show_login_screen()
         self.main_window.info_dialog("Info", "Logged out successfully")
 
-    # بقیه توابع بدون تغییر می‌مانند...
     def show_student_courses(self, widget):
         self.main_window.info_dialog("My Courses", "List of your courses will appear here")
 
