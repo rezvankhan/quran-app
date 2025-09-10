@@ -1,4 +1,4 @@
-# Frontend-toga.py - کامل
+# Frontend-toga.py - کامل با آیکون کتاب
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -21,7 +21,7 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
         title_label = toga.Label(
-            "📖 Quran Academy",
+            "📚 Quran Academy",
             style=Pack(text_align=CENTER, font_size=24, font_weight="bold", padding=20, color="#0D8E3D")
         )
         
@@ -36,7 +36,7 @@ class QuranApp(toga.App):
         )
         
         login_btn = toga.Button(
-            "🔐 Login",
+            "📖 Login",
             on_press=self.login,
             style=Pack(padding=15, background_color="#0D8E3D", color="white", width=200)
         )
@@ -44,13 +44,13 @@ class QuranApp(toga.App):
         register_box = toga.Box(style=Pack(direction=COLUMN, padding=10, alignment=CENTER))
         
         register_student_btn = toga.Button(
-            "👨‍🎓 Register as Student",
+            "📘 Register Student",
             on_press=self.show_register_student,
             style=Pack(padding=12, background_color="#2196F3", color="white", width=200)
         )
         
         register_teacher_btn = toga.Button(
-            "👨‍🏫 Register as Teacher",
+            "📗 Register Teacher",
             on_press=self.show_register_teacher,
             style=Pack(padding=12, background_color="#FF9800", color="white", width=200)
         )
@@ -75,7 +75,7 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
         title_label = toga.Label(
-            "👨‍🎓 Register Student",
+            "📘 Register Student",
             style=Pack(text_align=CENTER, font_size=20, font_weight="bold", padding=10, color="#2196F3")
         )
         
@@ -113,7 +113,7 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
         title_label = toga.Label(
-            "👨‍🏫 Register Teacher",
+            "📗 Register Teacher",
             style=Pack(text_align=CENTER, font_size=20, font_weight="bold", padding=10, color="#FF9800")
         )
         
@@ -151,7 +151,7 @@ class QuranApp(toga.App):
         
         header_box = toga.Box(style=Pack(direction=ROW, padding=10, background_color="#fff3e0"))
         user_info = toga.Label(
-            f"👨‍🏫 Teacher: {user_data['full_name']}",
+            f"📗 Teacher: {user_data['full_name']}",
             style=Pack(flex=1, font_size=16, font_weight="bold")
         )
         logout_btn = toga.Button(
@@ -170,7 +170,7 @@ class QuranApp(toga.App):
         content_box.add(info_box)
         
         quran_types_label = toga.Label(
-            "Select Quran Course Type:",
+            "📚 Select Quran Course Type:",
             style=Pack(padding=10, font_weight="bold")
         )
         
@@ -225,7 +225,7 @@ class QuranApp(toga.App):
         
         header_box = toga.Box(style=Pack(direction=ROW, padding=10, background_color="#e3f2fd"))
         user_info = toga.Label(
-            f"👨‍🎓 Student: {user_data['full_name']}",
+            f"📘 Student: {user_data['full_name']}",
             style=Pack(flex=1, font_size=16, font_weight="bold")
         )
         logout_btn = toga.Button(
@@ -406,42 +406,42 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
         
         header_box = toga.Box(style=Pack(direction=ROW, padding=10, background_color="#e3f2fd"))
-        header_box.add(toga.Label(f"Create New Course - {course_type}", style=Pack(flex=1, font_size=18, font_weight="bold")))
-        back_btn = toga.Button("Back", on_press=lambda w: self.show_teacher_dashboard(self.current_user))
+        header_box.add(toga.Label(f"📚 Create New Course - {course_type}", style=Pack(flex=1, font_size=18, font_weight="bold")))
+        back_btn = toga.Button("⬅ Back", on_press=lambda w: self.show_teacher_dashboard(self.current_user))
         header_box.add(back_btn)
         main_box.add(header_box)
         
         form_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
         
-        form_box.add(toga.Label("Course Title:", style=Pack(padding=5)))
+        form_box.add(toga.Label("📝 Course Title:", style=Pack(padding=5)))
         self.course_title = toga.TextInput(placeholder="Course title", style=Pack(padding=5))
         form_box.add(self.course_title)
         
-        form_box.add(toga.Label("Description:", style=Pack(padding=5)))
+        form_box.add(toga.Label("📄 Description:", style=Pack(padding=5)))
         self.course_description = toga.MultilineTextInput(placeholder="Course description", style=Pack(padding=5, height=100))
         form_box.add(self.course_description)
         
-        form_box.add(toga.Label("Level:", style=Pack(padding=5)))
+        form_box.add(toga.Label("📊 Level:", style=Pack(padding=5)))
         self.course_level = toga.Selection(
             items=["Beginner", "Intermediate", "Advanced"],
             style=Pack(padding=5)
         )
         form_box.add(self.course_level)
         
-        form_box.add(toga.Label("Duration (minutes):", style=Pack(padding=5)))
+        form_box.add(toga.Label("⏰ Duration (minutes):", style=Pack(padding=5)))
         self.course_duration = toga.NumberInput(min_value=30, max_value=180, value=60, style=Pack(padding=5))
         form_box.add(self.course_duration)
         
-        form_box.add(toga.Label("Max Students:", style=Pack(padding=5)))
+        form_box.add(toga.Label("👥 Max Students:", style=Pack(padding=5)))
         self.course_capacity = toga.NumberInput(min_value=1, max_value=50, value=10, style=Pack(padding=5))
         form_box.add(self.course_capacity)
         
-        form_box.add(toga.Label("Schedule:", style=Pack(padding=5)))
+        form_box.add(toga.Label("📅 Schedule:", style=Pack(padding=5)))
         self.course_schedule = toga.TextInput(placeholder="e.g., Monday & Wednesday 18-20", style=Pack(padding=5))
         form_box.add(self.course_schedule)
         
         create_btn = toga.Button(
-            "Create Course",
+            "✅ Create Course",
             on_press=lambda w: self.submit_course(course_type),
             style=Pack(padding=15, background_color="#4CAF50", color="white")
         )
