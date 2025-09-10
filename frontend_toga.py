@@ -1,4 +1,4 @@
-# Frontend-toga.py - کامل با آیکون کتاب
+# Frontend-toga.py - کامل با هدر زیبا
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -13,32 +13,44 @@ class QuranApp(toga.App):
         self.user_role = None
     
     def startup(self):
-        self.main_window = toga.MainWindow(title=self.formal_name, size=(400, 700))
+        self.main_window = toga.MainWindow(title="📚 Quran Academy", size=(400, 700))
         self.show_login_screen()
         self.main_window.show()
     
     def show_login_screen(self, widget=None):
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
-        title_label = toga.Label(
-            "📚 Quran App",  # آیکون کتاب به جای گاو
-            style=Pack(text_align=CENTER, font_size=24, font_weight="bold", padding=20, color="#0D8E3D")
+        # هدر زیبا با آیکون کتاب
+        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="#0D8E3D", alignment=CENTER))
+        header_icon = toga.Label(
+            "📚",
+            style=Pack(font_size=28, padding_right=10, color="white")
         )
+        header_text = toga.Label(
+            "Quran Academy",
+            style=Pack(color="white", font_size=22, font_weight="bold")
+        )
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        main_box.add(header_box)
+        
+        # محتوای اصلی
+        content_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
         self.username_input = toga.TextInput(
             placeholder="Username (Teachers) or Email (Students)",
-            style=Pack(padding=10, width=300)
+            style=Pack(padding=12, width=300, background_color="#f8f9fa")
         )
         
         self.password_input = toga.PasswordInput(
             placeholder="Password", 
-            style=Pack(padding=10, width=300)
+            style=Pack(padding=12, width=300, background_color="#f8f9fa")
         )
         
         login_btn = toga.Button(
             "Login",
             on_press=self.login,
-            style=Pack(padding=15, background_color="#0D8E3D", color="white", width=200)
+            style=Pack(padding=15, background_color="#0D8E3D", color="white", width=200, font_weight="bold")
         )
         
         register_box = toga.Box(style=Pack(direction=COLUMN, padding=10, alignment=CENTER))
@@ -60,24 +72,36 @@ class QuranApp(toga.App):
             style=Pack(text_align=CENTER, font_size=10, color="gray", padding=10)
         )
         
-        main_box.add(title_label)
-        main_box.add(self.username_input)
-        main_box.add(self.password_input)
-        main_box.add(login_btn)
+        content_box.add(self.username_input)
+        content_box.add(self.password_input)
+        content_box.add(login_btn)
         register_box.add(register_student_btn)
         register_box.add(register_teacher_btn)
-        main_box.add(register_box)
-        main_box.add(help_label)
+        content_box.add(register_box)
+        content_box.add(help_label)
         
+        main_box.add(content_box)
         self.main_window.content = main_box
 
     def show_register_student(self, widget):
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
-        title_label = toga.Label(
-            "Register Student",
-            style=Pack(text_align=CENTER, font_size=20, font_weight="bold", padding=10, color="#2196F3")
+        # هدر
+        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="#2196F3", alignment=CENTER))
+        header_icon = toga.Label(
+            "📘",
+            style=Pack(font_size=28, padding_right=10, color="white")
         )
+        header_text = toga.Label(
+            "Register Student",
+            style=Pack(color="white", font_size=22, font_weight="bold")
+        )
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        main_box.add(header_box)
+        
+        # محتوا
+        content_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
         self.name_input = toga.TextInput(placeholder="Full Name", style=Pack(padding=10, width=300))
         self.email_input = toga.TextInput(placeholder="Email", style=Pack(padding=10, width=300))
@@ -94,28 +118,40 @@ class QuranApp(toga.App):
         )
         
         back_btn = toga.Button(
-            "Back",
+            "Back to Login",
             on_press=self.show_login_screen,
-            style=Pack(padding=10, background_color="#f44336", color="white", width=150)
+            style=Pack(padding=10, background_color="#6c757d", color="white", width=150)
         )
         
-        main_box.add(title_label)
-        main_box.add(self.name_input)
-        main_box.add(self.email_input)
-        main_box.add(self.password_input)
-        main_box.add(self.level_input)
-        main_box.add(register_btn)
-        main_box.add(back_btn)
+        content_box.add(self.name_input)
+        content_box.add(self.email_input)
+        content_box.add(self.password_input)
+        content_box.add(self.level_input)
+        content_box.add(register_btn)
+        content_box.add(back_btn)
         
+        main_box.add(content_box)
         self.main_window.content = main_box
 
     def show_register_teacher(self, widget):
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
-        title_label = toga.Label(
-            "Register Teacher",
-            style=Pack(text_align=CENTER, font_size=20, font_weight="bold", padding=10, color="#FF9800")
+        # هدر
+        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="#FF9800", alignment=CENTER))
+        header_icon = toga.Label(
+            "📗",
+            style=Pack(font_size=28, padding_right=10, color="white")
         )
+        header_text = toga.Label(
+            "Register Teacher",
+            style=Pack(color="white", font_size=22, font_weight="bold")
+        )
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        main_box.add(header_box)
+        
+        # محتوا
+        content_box = toga.Box(style=Pack(direction=COLUMN, padding=30, alignment=CENTER))
         
         self.teacher_username = toga.TextInput(placeholder="Username", style=Pack(padding=10, width=300))
         self.teacher_password = toga.PasswordInput(placeholder="Password", style=Pack(padding=10, width=300))
@@ -130,37 +166,44 @@ class QuranApp(toga.App):
         )
         
         back_btn = toga.Button(
-            "Back",
+            "Back to Login",
             on_press=self.show_login_screen,
-            style=Pack(padding=10, background_color="#f44336", color="white", width=150)
+            style=Pack(padding=10, background_color="#6c757d", color="white", width=150)
         )
         
-        main_box.add(title_label)
-        main_box.add(self.teacher_username)
-        main_box.add(self.teacher_password)
-        main_box.add(self.teacher_name)
-        main_box.add(self.teacher_email)
-        main_box.add(self.teacher_specialty)
-        main_box.add(register_btn)
-        main_box.add(back_btn)
+        content_box.add(self.teacher_username)
+        content_box.add(self.teacher_password)
+        content_box.add(self.teacher_name)
+        content_box.add(self.teacher_email)
+        content_box.add(self.teacher_specialty)
+        content_box.add(register_btn)
+        content_box.add(back_btn)
         
+        main_box.add(content_box)
         self.main_window.content = main_box
 
     def show_teacher_dashboard(self, user_data):
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
-        header_box = toga.Box(style=Pack(direction=ROW, padding=10, background_color="#fff3e0"))
-        user_info = toga.Label(
+        # هدر
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#FF9800", alignment=CENTER))
+        header_icon = toga.Label(
+            "👨‍🏫",
+            style=Pack(font_size=24, padding_right=10, color="white")
+        )
+        header_text = toga.Label(
             f"Teacher: {user_data['full_name']}",
-            style=Pack(flex=1, font_size=16, font_weight="bold")
+            style=Pack(color="white", font_size=18, font_weight="bold", flex=1)
         )
         logout_btn = toga.Button(
             "Logout",
             on_press=self.logout,
-            style=Pack(padding=5, background_color="#f44336", color="white")
+            style=Pack(padding=8, background_color="#f44336", color="white")
         )
-        header_box.add(user_info)
+        header_box.add(header_icon)
+        header_box.add(header_text)
         header_box.add(logout_btn)
+        main_box.add(header_box)
         
         content_box = toga.Box(style=Pack(direction=COLUMN, padding=20, alignment=CENTER))
         
@@ -216,25 +259,31 @@ class QuranApp(toga.App):
             style=Pack(padding=15, width=200, background_color="#9C27B0", color="white")
         ))
         
-        main_box.add(header_box)
         main_box.add(content_box)
         self.main_window.content = main_box
 
     def show_student_dashboard(self, user_data):
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
-        header_box = toga.Box(style=Pack(direction=ROW, padding=10, background_color="#e3f2fd"))
-        user_info = toga.Label(
+        # هدر
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#2196F3", alignment=CENTER))
+        header_icon = toga.Label(
+            "👨‍🎓",
+            style=Pack(font_size=24, padding_right=10, color="white")
+        )
+        header_text = toga.Label(
             f"Student: {user_data['full_name']}",
-            style=Pack(flex=1, font_size=16, font_weight="bold")
+            style=Pack(color="white", font_size=18, font_weight="bold", flex=1)
         )
         logout_btn = toga.Button(
             "Logout",
             on_press=self.logout,
-            style=Pack(padding=5, background_color="#f44336", color="white")
+            style=Pack(padding=8, background_color="#f44336", color="white")
         )
-        header_box.add(user_info)
+        header_box.add(header_icon)
+        header_box.add(header_text)
         header_box.add(logout_btn)
+        main_box.add(header_box)
         
         content_box = toga.Box(style=Pack(direction=COLUMN, padding=20, alignment=CENTER))
         
@@ -267,10 +316,10 @@ class QuranApp(toga.App):
             style=Pack(padding=15, width=200, background_color="#9C27B0", color="white")
         ))
         
-        main_box.add(header_box)
         main_box.add(content_box)
         self.main_window.content = main_box
 
+    # بقیه توابع بدون تغییر (login, logout, register_student, register_teacher, etc.)
     def login(self, widget):
         try:
             identifier = self.username_input.value.strip()
