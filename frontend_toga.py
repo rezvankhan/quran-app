@@ -403,14 +403,14 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
         # هدر
-        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#FF9800", alignment=CENTER))
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="green", alignment=CENTER))
         header_icon = toga.Label(
             "👨‍🏫",
-            style=Pack(font_size=24, padding_right=10, color="white")
+            style=Pack(font_size=24, padding_right=10, color="#87CEEB")
         )
         header_text = toga.Label(
             f"Teacher: {user_data['full_name']}",
-            style=Pack(color="white", font_size=18, font_weight="bold", flex=1)
+            style=Pack(color="blue", font_size=18, font_weight="bold", flex=1)
         )
         logout_btn = toga.Button(
             "🚪 Logout",
@@ -483,14 +483,14 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
         # هدر
-        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#2196F3", alignment=CENTER))
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="green", alignment=CENTER))
         header_icon = toga.Label(
             "👨‍🎓",
-            style=Pack(font_size=24, padding_right=10, color="white")
+            style=Pack(font_size=24, padding_right=10, color="#87CEEB")
         )
         header_text = toga.Label(
             f"Student: {user_data['full_name']}",
-            style=Pack(color="white", font_size=18, font_weight="bold", flex=1)
+            style=Pack(color="blue", font_size=18, font_weight="bold", flex=1)
         )
         logout_btn = toga.Button(
             "🚪 Logout",
