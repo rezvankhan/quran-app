@@ -1,25 +1,89 @@
-# Frontend-toga.py - کامل با همه توابع
+# Frontend-toga.py - کامل بدون آیکون کتاب در نوار عنوان
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 import requests
 import json
+import os
+import sys
 
 class QuranApp(toga.App):
     def __init__(self):
-        super().__init__(
-            "📚 Quran Academy",
-            "com.quranapp.app"
-        )
+        # پیدا کردن مسیر آیکون
+        icon_path = self.find_icon()
+        
+        if icon_path:
+            super().__init__(
+                "Quran Academy",  # حذف ایموجی کتاب از عنوان
+                "com.quranapp.app",
+                icon=icon_path
+            )
+        else:
+            super().__init__(
+                "Quran Academy",  # حذف ایموجی کتاب از عنوان
+                "com.quranapp.app"
+            )
+            
         self.current_user = None
         self.user_token = None
         self.user_role = None
     
+    def find_icon(self):
+        """پیدا کردن آیکون در پوشه resources"""
+        try:
+            # پیدا کردن مسیر دایرکتوری برنامه
+            if getattr(sys, 'frozen', False):
+                # اگر برنامه packaged شده (مثل pyinstaller)
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                # اگر در حال اجرا از source
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            resources_dir = os.path.join(base_dir, "resources")
+            
+            # ایجاد پوشه resources اگر وجود ندارد
+            if not os.path.exists(resources_dir):
+                os.makedirs(resources_dir)
+                print("پوشه resources ایجاد شد. لطفاً آیکون را در آن قرار دهید.")
+                return None
+            
+            # فرمت‌های مختلف آیکون
+            icon_files = [
+                "quran_icon.ico",    # برای ویندوز
+                "quran_icon.png",    # برای مک و لینوکس
+                "icon.ico",
+                "icon.png"
+            ]
+            
+            # جستجوی آیکون
+            for icon_file in icon_files:
+                icon_path = os.path.join(resources_dir, icon_file)
+                if os.path.exists(icon_path):
+                    print(f"آیکون پیدا شد: {icon_path}")
+                    return icon_path
+            
+            print("هیچ آیکونی پیدا نشد. از آیکون پیش‌فرض استفاده می‌شود.")
+            return None
+            
+        except Exception as e:
+            print(f"خطا در پیدا کردن آیکون: {e}")
+            return None
+    
     def startup(self):
+        # ایجاد پنجره اصلی با آیکون سفارشی
         self.main_window = toga.MainWindow(
-            title="📚 Quran Academy - Islamic Learning Platform",
+            title="Quran Academy - Islamic Learning Platform",  # حذف ایموجی کتاب
             size=(500, 800)
         )
+        
+        # اگر آیکون پیدا شد، برای پنجره هم ست کنیم
+        icon_path = self.find_icon()
+        if icon_path:
+            try:
+                self.main_window.icon = icon_path
+            except:
+                pass  # اگر ست کردن آیکون برای پنجره امکان‌پذیر نبود
+        
         self.show_login_screen()
         self.main_window.show()
     
@@ -112,14 +176,14 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
         # هدر
-        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="#2196F3", alignment=CENTER))
+        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="green", alignment=CENTER))
         header_icon = toga.Label(
             "👨‍🎓",
-            style=Pack(font_size=28, padding_right=10, color="white")
+            style=Pack(font_size=28, padding_right=10, color="#87CEEB")
         )
         header_text = toga.Label(
             "Student Registration",
-            style=Pack(color="white", font_size=20, font_weight="bold")
+            style=Pack(color="blue", font_size=20, font_weight="bold")
         )
         header_box.add(header_icon)
         header_box.add(header_text)
@@ -171,14 +235,14 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
         # هدر
-        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="#FF9800", alignment=CENTER))
+        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="green", alignment=CENTER))
         header_icon = toga.Label(
             "👨‍🏫",
-            style=Pack(font_size=28, padding_right=10, color="white")
+            style=Pack(font_size=28, padding_right=10, color="#87CEEB")
         )
         header_text = toga.Label(
             "Teacher Registration",
-            style=Pack(color="white", font_size=20, font_weight="bold")
+            style=Pack(color="blue", font_size=20, font_weight="bold")
         )
         header_box.add(header_icon)
         header_box.add(header_text)
