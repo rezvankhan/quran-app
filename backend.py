@@ -1,11 +1,10 @@
 # backend.py - کامل با JWT Authentication و بهبودهای ضروری
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from typing import Optional, List
 import sqlite3
-import hashlib
 import os
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
@@ -127,9 +126,6 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-class EnrollmentRequest(BaseModel):
-    student_id: int
-
 class CourseCreate(BaseModel):
     title: str
     description: str
@@ -143,9 +139,6 @@ class CourseCreate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-class TokenData(BaseModel):
-    user_id: Optional[int] = None
 
 # ایجاد جداول و داده‌های تست
 def init_db():
@@ -467,7 +460,7 @@ async def register_teacher(teacher: TeacherRegister):
         logger.error(f"Teacher registration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/login", response_model=Token)
+@app.post("/login")
 async def login(login_data: LoginRequest):
     try:
         logger.info(f"Login attempt: username={login_data.username}")
