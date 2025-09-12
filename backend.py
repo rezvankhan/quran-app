@@ -1,18 +1,30 @@
-# backend.py - کامل با endpoint جدید
-from fastapi import FastAPI, HTTPException
+# backend.py - کامل با JWT Authentication و بهبودهای ضروری
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import sqlite3
 import hashlib
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 import logging
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 # تنظیمات logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# تنظیمات JWT
+SECRET_KEY = "your-secret-key-please-change-in-production"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 3600  # 1 hour
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 # تشخیص محیط
 def get_db_connection():
@@ -35,6 +47,67 @@ def row_to_dict(row):
 def rows_to_dict_list(rows):
     """تبدیل لیست sqlite3.Row به لیست dictionary"""
     return [dict(row) for row in rows] if rows else []
+
+# توابع Authentication
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: int = payload.get("user_id")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+            )
+        return user_id
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+        )
+
+async def get_current_teacher(user_id: int = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user or user['role'] != 'teacher':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Teacher access required",
+        )
+    return user_id
+
+async def get_current_student(user_id: int = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user or user['role'] != 'student':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Student access required",
+        )
+    return user_id
 
 # مدل‌های داده
 class StudentRegister(BaseModel):
@@ -67,9 +140,12 @@ class CourseCreate(BaseModel):
     max_students: int = 10
     schedule: str
 
-# تابع hash کردن password
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    user_id: Optional[int] = None
 
 # ایجاد جداول و داده‌های تست
 def init_db():
@@ -153,10 +229,10 @@ def init_db():
             
             # کاربران تست
             test_users = [
-                ('admin@quran.com', hash_password('admin123'), 'admin', 'Admin User', 'admin@quran.com', '', True),
-                ('teacher1', hash_password('teacher123'), 'teacher', 'استاد احمد', 'teacher1@quran.com', 'Quran Recitation', True),
-                ('student1@quran.com', hash_password('student123'), 'student', 'دانشجو محمد', 'student1@quran.com', '', True),
-                ('student2@quran.com', hash_password('student123'), 'student', 'دانشجو فاطمه', 'student2@quran.com', '', True)
+                ('admin@quran.com', get_password_hash('admin123'), 'admin', 'Admin User', 'admin@quran.com', '', True),
+                ('teacher1', get_password_hash('teacher123'), 'teacher', 'استاد احمد', 'teacher1@quran.com', 'Quran Recitation', True),
+                ('student1@quran.com', get_password_hash('student123'), 'student', 'دانشجو محمد', 'student1@quran.com', '', True),
+                ('student2@quran.com', get_password_hash('student123'), 'student', 'دانشجو فاطمه', 'student2@quran.com', '', True)
             ]
             
             for user in test_users:
@@ -288,20 +364,6 @@ async def debug_users():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/debug/passwords")
-async def debug_passwords():
-    """Endpoint برای دیباگ پسوردها"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, username, email, password, role FROM users")
-        users = cursor.fetchall()
-        conn.close()
-        
-        return {"users": rows_to_dict_list(users)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/admin/reset-passwords")
 async def reset_passwords():
     """ریست کردن پسورد همه کاربران به مقدار پیش‌فرض"""
@@ -314,13 +376,12 @@ async def reset_passwords():
             "admin@quran.com": "admin123",
             "teacher1": "teacher123", 
             "student1@quran.com": "student123",
-            "student2@quran.com": "student123",
-            "testuser@example.com": "simplepassword"
+            "student2@quran.com": "student123"
         }
         
         updated_count = 0
         for username, password in default_passwords.items():
-            hashed_password = hash_password(password)
+            hashed_password = get_password_hash(password)
             cursor.execute(
                 "UPDATE users SET password = ? WHERE username = ?",
                 (hashed_password, username)
@@ -348,7 +409,7 @@ async def register_student(student: StudentRegister):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        hashed_password = hash_password(student.password)
+        hashed_password = get_password_hash(student.password)
         logger.info(f"Registering student: {student.email}")
         
         cursor.execute(
@@ -380,7 +441,7 @@ async def register_teacher(teacher: TeacherRegister):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        hashed_password = hash_password(teacher.password)
+        hashed_password = get_password_hash(teacher.password)
         logger.info(f"Registering teacher: {teacher.username}")
         
         cursor.execute(
@@ -406,7 +467,7 @@ async def register_teacher(teacher: TeacherRegister):
         logger.error(f"Teacher registration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/login")
+@app.post("/login", response_model=Token)
 async def login(login_data: LoginRequest):
     try:
         logger.info(f"Login attempt: username={login_data.username}")
@@ -414,43 +475,62 @@ async def login(login_data: LoginRequest):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        hashed_password = hash_password(login_data.password)
-        logger.info(f"Password hash: {hashed_password}")
-        
-        # دیباگ: نمایش تمام کاربران
-        cursor.execute("SELECT username, email, password FROM users")
-        all_users = cursor.fetchall()
-        logger.info(f"Users in database: {rows_to_dict_list(all_users)}")
-        
         cursor.execute(
-            "SELECT * FROM users WHERE (username = ? OR email = ?) AND password = ?",
-            (login_data.username, login_data.username, hashed_password)
+            "SELECT * FROM users WHERE username = ? OR email = ?",
+            (login_data.username, login_data.username)
         )
         
         user = cursor.fetchone()
         conn.close()
         
-        if user:
+        if user and verify_password(login_data.password, user['password']):
             user_dict = row_to_dict(user)
+            
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token = create_access_token(
+                data={"user_id": user_dict['id'], "sub": user_dict['username']},
+                expires_delta=access_token_expires
+            )
+            
             logger.info(f"Login successful for user: {user_dict['username']}")
             return {
-                "success": True,
-                "user": {
-                    "id": user_dict['id'],
-                    "username": user_dict['username'],
-                    "full_name": user_dict['full_name'],
-                    "email": user_dict['email'],
-                    "role": user_dict['role'],
-                    "specialty": user_dict.get('specialty', ''),
-                    "approved": bool(user_dict['approved'])
-                }
+                "access_token": access_token,
+                "token_type": "bearer"
             }
         else:
             logger.warning("Login failed: Invalid credentials")
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
             
     except Exception as e:
         logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/users/me")
+async def read_users_me(current_user: int = Depends(get_current_user)):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (current_user,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if user:
+            user_dict = row_to_dict(user)
+            return {
+                "id": user_dict['id'],
+                "username": user_dict['username'],
+                "full_name": user_dict['full_name'],
+                "email": user_dict['email'],
+                "role": user_dict['role'],
+                "specialty": user_dict.get('specialty', ''),
+                "approved": bool(user_dict['approved'])
+            }
+        raise HTTPException(status_code=404, detail="User not found")
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/courses")
@@ -475,8 +555,8 @@ async def get_courses():
         logger.error(f"Get courses error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/my-courses/{user_id}")
-async def get_my_courses(user_id: int):
+@app.get("/my-courses")
+async def get_my_courses(current_user: int = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -487,7 +567,7 @@ async def get_my_courses(user_id: int):
             JOIN enrollments e ON c.id = e.class_id
             JOIN users u ON c.teacher_id = u.id
             WHERE e.student_id = ? AND e.status = 'active'
-        """, (user_id,))
+        """, (current_user,))
         
         courses = cursor.fetchall()
         conn.close()
@@ -499,7 +579,7 @@ async def get_my_courses(user_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/enroll/{class_id}")
-async def enroll_student(class_id: int, request: EnrollmentRequest):
+async def enroll_student(class_id: int, current_user: int = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -510,15 +590,15 @@ async def enroll_student(class_id: int, request: EnrollmentRequest):
         if not class_data:
             raise HTTPException(status_code=404, detail="Class not found")
         
-        cursor.execute("SELECT * FROM users WHERE id = ? AND role = 'student'", (request.student_id,))
+        cursor.execute("SELECT * FROM users WHERE id = ? AND role = 'student'", (current_user,))
         student = cursor.fetchone()
         
         if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
+            raise HTTPException(status_code=403, detail="Only students can enroll in classes")
         
         cursor.execute(
             "SELECT * FROM enrollments WHERE student_id = ? AND class_id = ?",
-            (request.student_id, class_id)
+            (current_user, class_id)
         )
         existing = cursor.fetchone()
         
@@ -527,7 +607,7 @@ async def enroll_student(class_id: int, request: EnrollmentRequest):
         
         cursor.execute(
             "INSERT INTO enrollments (student_id, class_id, status) VALUES (?, ?, 'active')",
-            (request.student_id, class_id)
+            (current_user, class_id)
         )
         
         conn.commit()
@@ -556,16 +636,14 @@ async def get_users():
         logger.error(f"Get users error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# endpoint جدید برای ایجاد دوره توسط معلم
 @app.post("/teacher/courses")
-async def create_course(course_data: CourseCreate):
+async def create_course(
+    course_data: CourseCreate, 
+    current_user: int = Depends(get_current_teacher)
+):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # برای تست از teacher_id=2 استفاده می‌کنیم (teacher1)
-        # در واقعیت باید از authentication استفاده شود
-        teacher_id = 2
         
         cursor.execute(
             """
@@ -573,7 +651,7 @@ async def create_course(course_data: CourseCreate):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                teacher_id,
+                current_user,
                 course_data.title,
                 course_data.description,
                 course_data.level,
@@ -599,9 +677,8 @@ async def create_course(course_data: CourseCreate):
         logger.error(f"Error creating course: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating course: {str(e)}")
 
-# endpoint جدید برای دریافت دوره‌های معلم
-@app.get("/teacher/{teacher_id}/courses")
-async def get_teacher_courses(teacher_id: int):
+@app.get("/teacher/courses")
+async def get_teacher_courses(current_user: int = Depends(get_current_teacher)):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -612,7 +689,7 @@ async def get_teacher_courses(teacher_id: int):
             LEFT JOIN enrollments e ON c.id = e.class_id
             WHERE c.teacher_id = ?
             GROUP BY c.id
-        """, (teacher_id,))
+        """, (current_user,))
         
         courses = cursor.fetchall()
         conn.close()
