@@ -1,4 +1,4 @@
-# Frontend-toga.py - کامل بدون آیکون کتاب در نوار عنوان
+# Frontend-toga.py - کامل با پشتیبانی از JWT Authentication
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -6,84 +6,63 @@ import requests
 import json
 import os
 import sys
+from datetime import datetime, timedelta
 
 class QuranApp(toga.App):
     def __init__(self):
-        # پیدا کردن مسیر آیکون
-        icon_path = self.find_icon()
-        
-        if icon_path:
-            super().__init__(
-                "Quran Academy",  # حذف ایموجی کتاب از عنوان
-                "com.quranapp.app",
-                icon=icon_path
-            )
-        else:
-            super().__init__(
-                "Quran Academy",  # حذف ایموجی کتاب از عنوان
-                "com.quranapp.app"
-            )
-            
+        super().__init__("Quran Academy", "com.quranapp.app")
         self.current_user = None
         self.user_token = None
         self.user_role = None
+        self.token_expiry = None
     
-    def find_icon(self):
-        """پیدا کردن آیکون در پوشه resources"""
-        try:
-            # پیدا کردن مسیر دایرکتوری برنامه
-            if getattr(sys, 'frozen', False):
-                # اگر برنامه packaged شده (مثل pyinstaller)
-                base_dir = os.path.dirname(sys.executable)
-            else:
-                # اگر در حال اجرا از source
-                base_dir = os.path.dirname(os.path.abspath(__file__))
-            
-            resources_dir = os.path.join(base_dir, "resources")
-            
-            # ایجاد پوشه resources اگر وجود ندارد
-            if not os.path.exists(resources_dir):
-                os.makedirs(resources_dir)
-                print("پوشه resources ایجاد شد. لطفاً آیکون را در آن قرار دهید.")
-                return None
-            
-            # فرمت‌های مختلف آیکون
-            icon_files = [
-                "quran_icon.ico",    # برای ویندوز
-                "quran_icon.png",    # برای مک و لینوکس
-                "icon.ico",
-                "icon.png"
-            ]
-            
-            # جستجوی آیکون
-            for icon_file in icon_files:
-                icon_path = os.path.join(resources_dir, icon_file)
-                if os.path.exists(icon_path):
-                    print(f"آیکون پیدا شد: {icon_path}")
-                    return icon_path
-            
-            print("هیچ آیکونی پیدا نشد. از آیکون پیش‌فرض استفاده می‌شود.")
+    def get_auth_headers(self):
+        """دریافت هدرهای احراز هویت"""
+        headers = {"Content-Type": "application/json"}
+        if self.user_token:
+            headers["Authorization"] = f"Bearer {self.user_token}"
+        return headers
+    
+    def is_token_valid(self):
+        """بررسی معتبر بودن توکن"""
+        if not self.user_token or not self.token_expiry:
+            return False
+        return datetime.now() < self.token_expiry
+    
+    def logout(self, widget=None):
+        """خروج از سیستم"""
+        self.current_user = None
+        self.user_token = None
+        self.user_role = None
+        self.token_expiry = None
+        self.show_login_screen()
+        self.main_window.info_dialog("Info", "Logged out successfully")
+    
+    def make_authenticated_request(self, method, url, **kwargs):
+        """انجام درخواست با احراز هویت"""
+        if not self.is_token_valid():
+            self.main_window.info_dialog("Session Expired", "Please login again")
+            self.logout()
             return None
-            
+        
+        headers = self.get_auth_headers()
+        if 'headers' in kwargs:
+            kwargs['headers'].update(headers)
+        else:
+            kwargs['headers'] = headers
+        
+        try:
+            response = requests.request(method, url, **kwargs, timeout=30)
+            return response
         except Exception as e:
-            print(f"خطا در پیدا کردن آیکون: {e}")
+            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
             return None
     
     def startup(self):
-        # ایجاد پنجره اصلی با آیکون سفارشی
         self.main_window = toga.MainWindow(
-            title="Quran Academy - Islamic Learning Platform",  # حذف ایموجی کتاب
+            title="Quran Academy - Islamic Learning Platform",
             size=(500, 800)
         )
-        
-        # اگر آیکون پیدا شد، برای پنجره هم ست کنیم
-        icon_path = self.find_icon()
-        if icon_path:
-            try:
-                self.main_window.icon = icon_path
-            except:
-                pass  # اگر ست کردن آیکون برای پنجره امکان‌پذیر نبود
-        
         self.show_login_screen()
         self.main_window.show()
     
@@ -172,129 +151,6 @@ class QuranApp(toga.App):
         main_box.add(content_box)
         self.main_window.content = main_box
 
-    def show_register_student(self, widget):
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
-        
-        # هدر
-        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="green", alignment=CENTER))
-        header_icon = toga.Label(
-            "👨‍🎓",
-            style=Pack(font_size=28, padding_right=10, color="#87CEEB")
-        )
-        header_text = toga.Label(
-            "Student Registration",
-            style=Pack(color="blue", font_size=20, font_weight="bold")
-        )
-        header_box.add(header_icon)
-        header_box.add(header_text)
-        main_box.add(header_box)
-        
-        # محتوا
-        content_box = toga.Box(style=Pack(direction=COLUMN, padding=25, alignment=CENTER))
-        
-        self.name_input = toga.TextInput(
-            placeholder="Full Name", 
-            style=Pack(padding=10, width=300, background_color="#f8f9fa")
-        )
-        self.email_input = toga.TextInput(
-            placeholder="Email Address", 
-            style=Pack(padding=10, width=300, background_color="#f8f9fa")
-        )
-        self.password_input = toga.PasswordInput(
-            placeholder="Password", 
-            style=Pack(padding=10, width=300, background_color="#f8f9fa")
-        )
-        self.level_input = toga.Selection(
-            items=["Beginner", "Intermediate", "Advanced"],
-            style=Pack(padding=10, width=300)
-        )
-        
-        register_btn = toga.Button(
-            "🚀 Create Student Account",
-            on_press=self.register_student,
-            style=Pack(padding=15, background_color="#2196F3", color="white", width=250, font_weight="bold")
-        )
-        
-        back_btn = toga.Button(
-            "⬅ Back to Login",
-            on_press=self.show_login_screen,
-            style=Pack(padding=10, background_color="#6c757d", color="white", width=180)
-        )
-        
-        content_box.add(self.name_input)
-        content_box.add(self.email_input)
-        content_box.add(self.password_input)
-        content_box.add(self.level_input)
-        content_box.add(register_btn)
-        content_box.add(back_btn)
-        
-        main_box.add(content_box)
-        self.main_window.content = main_box
-
-    def show_register_teacher(self, widget):
-        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
-        
-        # هدر
-        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="green", alignment=CENTER))
-        header_icon = toga.Label(
-            "👨‍🏫",
-            style=Pack(font_size=28, padding_right=10, color="#87CEEB")
-        )
-        header_text = toga.Label(
-            "Teacher Registration",
-            style=Pack(color="blue", font_size=20, font_weight="bold")
-        )
-        header_box.add(header_icon)
-        header_box.add(header_text)
-        main_box.add(header_box)
-        
-        # محتوا
-        content_box = toga.Box(style=Pack(direction=COLUMN, padding=25, alignment=CENTER))
-        
-        self.teacher_username = toga.TextInput(
-            placeholder="Username", 
-            style=Pack(padding=10, width=300, background_color="#f8f9fa")
-        )
-        self.teacher_password = toga.PasswordInput(
-            placeholder="Password", 
-            style=Pack(padding=10, width=300, background_color="#f8f9fa")
-        )
-        self.teacher_name = toga.TextInput(
-            placeholder="Full Name", 
-            style=Pack(padding=10, width=300, background_color="#f8f9fa")
-        )
-        self.teacher_email = toga.TextInput(
-            placeholder="Email Address", 
-            style=Pack(padding=10, width=300, background_color="#f8f9fa")
-        )
-        self.teacher_specialty = toga.TextInput(
-            placeholder="Specialty (e.g., Tajweed, Recitation)", 
-            style=Pack(padding=10, width=300, background_color="#f8f9fa")
-        )
-        
-        register_btn = toga.Button(
-            "🚀 Create Teacher Account",
-            on_press=self.register_teacher,
-            style=Pack(padding=15, background_color="#FF9800", color="white", width=250, font_weight="bold")
-        )
-        
-        back_btn = toga.Button(
-            "⬅ Back to Login",
-            on_press=self.show_login_screen,
-            style=Pack(padding=10, background_color="#6c757d", color="white", width=180)
-        )
-        
-        content_box.add(self.teacher_username)
-        content_box.add(self.teacher_password)
-        content_box.add(self.teacher_name)
-        content_box.add(self.teacher_email)
-        content_box.add(self.teacher_specialty)
-        content_box.add(register_btn)
-        content_box.add(back_btn)
-        
-        main_box.add(content_box)
-        self.main_window.content = main_box
-
     def login(self, widget):
         try:
             identifier = self.username_input.value.strip()
@@ -305,7 +161,7 @@ class QuranApp(toga.App):
                 return
             
             response = requests.post(
-                "https://quran-app-kw38.onrender.com/login",
+                "https://your-render-app.onrender.com/api/login",
                 json={"username": identifier, "password": password},
                 headers={"Content-Type": "application/json"},
                 timeout=30
@@ -315,86 +171,31 @@ class QuranApp(toga.App):
             
             if response.status_code == 200:
                 result = response.json()
-                self.current_user = result['user']
-                self.user_role = result['user']['role']
+                self.user_token = result['access_token']
+                self.token_expiry = datetime.now() + timedelta(hours=1)  # توکن 1 ساعت اعتبار دارد
                 
-                if self.user_role == 'student':
-                    self.show_student_dashboard(self.current_user)
-                elif self.user_role == 'teacher':
-                    self.show_teacher_dashboard(self.current_user)
+                # دریافت اطلاعات کاربر با توکن
+                user_response = self.make_authenticated_request(
+                    "GET", "https://your-render-app.onrender.com/api/users/me"
+                )
+                
+                if user_response and user_response.status_code == 200:
+                    user_data = user_response.json()
+                    self.current_user = user_data
+                    self.user_role = user_data['role']
+                    
+                    if self.user_role == 'student':
+                        self.show_student_dashboard(user_data)
+                    elif self.user_role == 'teacher':
+                        self.show_teacher_dashboard(user_data)
+                    else:
+                        self.main_window.info_dialog("Success", f"Login successful! Welcome {user_data['full_name']}")
                 else:
-                    self.main_window.info_dialog("Success", f"Login successful! Welcome {self.current_user['full_name']}")
+                    self.main_window.error_dialog("Error", "Failed to get user information")
                     
             else:
                 error_msg = response.json().get("detail", "Login failed")
                 self.main_window.error_dialog("Error", f"Login failed: {error_msg}")
-                
-        except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
-
-    def logout(self, widget):
-        self.current_user = None
-        self.user_token = None
-        self.user_role = None
-        self.show_login_screen()
-        self.main_window.info_dialog("Info", "Logged out successfully")
-
-    def register_student(self, widget):
-        try:
-            name = self.name_input.value.strip()
-            email = self.email_input.value.strip()
-            password = self.password_input.value
-            level = self.level_input.value
-            
-            if not all([name, email, password, level]):
-                self.main_window.error_dialog("Error", "Please fill all fields")
-                return
-            
-            response = requests.post(
-                "https://quran-app-kw38.onrender.com/register/student",
-                json={"name": name, "email": email, "password": password, "level": level},
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Student registration successful! Please login with your email.")
-                self.show_login_screen()
-            else:
-                error_msg = response.json().get("detail", "Registration failed")
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
-                
-        except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
-
-    def register_teacher(self, widget):
-        try:
-            username = self.teacher_username.value.strip()
-            password = self.teacher_password.value
-            full_name = self.teacher_name.value.strip()
-            email = self.teacher_email.value.strip()
-            specialty = self.teacher_specialty.value.strip()
-            
-            if not all([username, password, full_name, email, specialty]):
-                self.main_window.error_dialog("Error", "Please fill all fields")
-                return
-            
-            response = requests.post(
-                "https://quran-app-kw38.onrender.com/register/teacher",
-                json={
-                    "username": username, "password": password, 
-                    "full_name": full_name, "email": email, "specialty": specialty
-                },
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Teacher registration successful! Please login with your username.")
-                self.show_login_screen()
-            else:
-                error_msg = response.json().get("detail", "Registration failed")
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
                 
         except Exception as e:
             self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
@@ -537,21 +338,35 @@ class QuranApp(toga.App):
         self.main_window.content = main_box
 
     def show_student_courses(self, widget):
-        self.main_window.info_dialog("My Courses", "List of your courses will appear here")
-
-    def show_student_progress(self, widget):
-        self.main_window.info_dialog("Progress", "Your progress report will appear here")
-
-    def find_teachers(self, widget):
-        self.main_window.info_dialog("Find Teachers", "Available teachers list will appear here")
-
-    def show_student_schedule(self, widget):
-        self.main_window.info_dialog("Schedule", "Your class schedule will appear here")
+        """نمایش دوره‌های دانشجو"""
+        response = self.make_authenticated_request(
+            "GET", "https://your-render-app.onrender.com/api/my-courses"
+        )
+        
+        if response and response.status_code == 200:
+            courses = response.json().get('my_courses', [])
+            courses_list = "\n".join([f"📖 {course['title']} - Progress: {course.get('progress', 0)}%" 
+                                    for course in courses])
+            self.main_window.info_dialog("My Courses", courses_list or "No courses enrolled")
+        else:
+            self.main_window.error_dialog("Error", "Failed to load courses")
 
     def show_teacher_classes(self, widget):
-        self.main_window.info_dialog("My Classes", "List of your teaching classes will appear here")
+        """نمایش کلاس‌های معلم"""
+        response = self.make_authenticated_request(
+            "GET", "https://your-render-app.onrender.com/api/teacher/courses"
+        )
+        
+        if response and response.status_code == 200:
+            courses = response.json().get('courses', [])
+            courses_list = "\n".join([f"🎯 {course['title']} - Students: {course.get('enrolled_students', 0)}" 
+                                    for course in courses])
+            self.main_window.info_dialog("My Classes", courses_list or "No classes created")
+        else:
+            self.main_window.error_dialog("Error", "Failed to load classes")
 
     def create_class(self, widget):
+        """ایجاد دوره جدید توسط معلم"""
         try:
             selected_type = self.quran_type_combo.value
             if not selected_type:
@@ -564,6 +379,7 @@ class QuranApp(toga.App):
             self.main_window.error_dialog("Error", f"Error creating course: {str(e)}")
 
     def show_create_course_form(self, course_type):
+        """نمایش فرم ایجاد دوره"""
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
         
         header_box = toga.Box(style=Pack(direction=ROW, padding=10, background_color="#e3f2fd"))
@@ -594,62 +410,4 @@ class QuranApp(toga.App):
         form_box.add(self.course_duration)
         
         form_box.add(toga.Label("Max Students:", style=Pack(padding=5)))
-        self.course_capacity = toga.NumberInput(min_value=1, max_value=50, value=10, style=Pack(padding=5))
-        form_box.add(self.course_capacity)
-        
-        form_box.add(toga.Label("Schedule:", style=Pack(padding=5)))
-        self.course_schedule = toga.TextInput(placeholder="e.g., Monday & Wednesday 18-20", style=Pack(padding=5))
-        form_box.add(self.course_schedule)
-        
-        create_btn = toga.Button(
-            "Create Course",
-            on_press=lambda w: self.submit_course(course_type),
-            style=Pack(padding=15, background_color="#4CAF50", color="white")
-        )
-        form_box.add(create_btn)
-        
-        main_box.add(form_box)
-        self.main_window.content = main_box
-
-    def submit_course(self, course_type):
-        try:
-            course_data = {
-                "title": self.course_title.value,
-                "description": self.course_description.value,
-                "level": self.course_level.value,
-                "category": course_type,
-                "duration": int(self.course_duration.value),
-                "max_students": int(self.course_capacity.value),
-                "schedule": self.course_schedule.value,
-                "price": 0
-            }
-            
-            response = requests.post(
-                "https://quran-app-kw38.onrender.com/teacher/courses",
-                json=course_data,
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Course created successfully!")
-                self.show_teacher_dashboard(self.current_user)
-            else:
-                error_msg = response.json().get("detail", "Error creating course")
-                self.main_window.error_dialog("Error", error_msg)
-                
-        except Exception as e:
-            self.main_window.error_dialog("Error", f"Error creating course: {str(e)}")
-
-    def show_teacher_students(self, widget):
-        self.main_window.info_dialog("My Students", "List of your students will appear here")
-
-    def show_teacher_stats(self, widget):
-        self.main_window.info_dialog("Statistics", "Teaching statistics will appear here")
-
-def main():
-    return QuranApp()
-
-if __name__ == "__main__":
-    app = main()
-    app.main_loop()
+        self.course_capacity = toga.Number
