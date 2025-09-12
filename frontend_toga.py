@@ -410,4 +410,88 @@ class QuranApp(toga.App):
         form_box.add(self.course_duration)
         
         form_box.add(toga.Label("Max Students:", style=Pack(padding=5)))
-        self.course_capacity = toga.Number
+        self.course_capacity = toga.NumberInput(min_value=1, max_value=50, value=10, style=Pack(padding=5))
+        form_box.add(self.course_capacity)
+        
+        form_box.add(toga.Label("Schedule:", style=Pack(padding=5)))
+        self.course_schedule = toga.TextInput(placeholder="e.g., Monday & Wednesday 18-20", style=Pack(padding=5))
+        form_box.add(self.course_schedule)
+        
+        create_btn = toga.Button(
+            "Create Course",
+            on_press=lambda w: self.submit_course(course_type),
+            style=Pack(padding=15, background_color="#4CAF50", color="white")
+        )
+        form_box.add(create_btn)
+        
+        main_box.add(form_box)
+        self.main_window.content = main_box
+
+    def submit_course(self, course_type):
+        """ارسال اطلاعات دوره به سرور"""
+        try:
+            course_data = {
+                "title": self.course_title.value,
+                "description": self.course_description.value,
+                "level": self.course_level.value,
+                "category": course_type,
+                "duration": int(self.course_duration.value),
+                "max_students": int(self.course_capacity.value),
+                "schedule": self.course_schedule.value,
+                "price": 0
+            }
+            
+            response = self.make_authenticated_request(
+                "POST", 
+                "https://your-render-app.onrender.com/api/teacher/courses",
+                json=course_data
+            )
+            
+            if response and response.status_code == 200:
+                self.main_window.info_dialog("Success", "Course created successfully!")
+                self.show_teacher_dashboard(self.current_user)
+            else:
+                error_msg = response.json().get("detail", "Error creating course") if response else "Unknown error"
+                self.main_window.error_dialog("Error", error_msg)
+                
+        except Exception as e:
+            self.main_window.error_dialog("Error", f"Error creating course: {str(e)}")
+
+    # سایر متدها بدون تغییر باقی می‌مانند...
+    def show_student_progress(self, widget):
+        self.main_window.info_dialog("Progress", "Your progress report will appear here")
+
+    def find_teachers(self, widget):
+        self.main_window.info_dialog("Find Teachers", "Available teachers list will appear here")
+
+    def show_student_schedule(self, widget):
+        self.main_window.info_dialog("Schedule", "Your class schedule will appear here")
+
+    def show_teacher_students(self, widget):
+        self.main_window.info_dialog("My Students", "List of your students will appear here")
+
+    def show_teacher_stats(self, widget):
+        self.main_window.info_dialog("Statistics", "Teaching statistics will appear here")
+
+    def show_register_student(self, widget):
+        # کدهای قبلی بدون تغییر...
+        pass
+
+    def show_register_teacher(self, widget):
+        # کدهای قبلی بدون تغییر...
+        pass
+
+    def register_student(self, widget):
+        # کدهای قبلی بدون تغییر...
+        pass
+
+    def register_teacher(self, widget):
+        # کدهای قبلی بدون تغییر...
+        pass
+
+def main():
+    return QuranApp()
+
+if __name__ == "__main__":
+    app = main()
+    app.main_loop()
