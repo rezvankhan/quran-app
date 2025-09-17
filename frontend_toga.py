@@ -1,4 +1,4 @@
-# Frontend-toga.py - نسخه تصحیح شده
+# Frontend-toga.py - کامل و اصلاح شده برای Python 3.13
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -15,7 +15,7 @@ class QuranApp(toga.App):
         self.user_token = None
         self.user_role = None
         self.token_expiry = None
-        self.BASE_URL = "https://quran-academy-backend.onrender.com"
+        self.BASE_URL = "https://quran-academy-backend.onrender.com"  # آدرس Render شما
         print(f"🔗 Connecting to backend: {self.BASE_URL}")
         
     def get_auth_headers(self):
@@ -35,11 +35,11 @@ class QuranApp(toga.App):
         self.user_role = None
         self.token_expiry = None
         self.show_login_screen()
-        self.main_window.info_dialog("Info", "Logged out successfully")
+        self.show_info("Info", "Logged out successfully")
     
     def make_authenticated_request(self, method, endpoint, **kwargs):
         if not self.is_token_valid():
-            self.main_window.info_dialog("Session Expired", "Please login again")
+            self.show_info("Session Expired", "Please login again")
             self.logout()
             return None
         
@@ -55,14 +55,28 @@ class QuranApp(toga.App):
             response = requests.request(method, url, **kwargs, timeout=30)
             return response
         except requests.exceptions.ConnectionError:
-            self.main_window.error_dialog("Connection Error", 
+            self.show_error("Connection Error", 
                 f"Cannot connect to server at {self.BASE_URL}. Please check if the backend is running on Render.")
             return None
         except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+            self.show_error("Error", f"Connection error: {str(e)}")
             return None
 
-    # حذف توابع show_error و show_info و استفاده مستقیم از main_window
+    # توابع جدید برای dialog بدون deprecation warning
+    def show_error(self, title, message):
+        dialog = toga.ErrorDialog(title=title, message=message)
+        dialog.show()
+
+    def show_info(self, title, message):
+        dialog = toga.InfoDialog(title=title, message=message)
+        dialog.show()
+
+    def show_confirm(self, title, message, on_confirm):
+        def callback(dialog, result):
+            if result:
+                on_confirm()
+        dialog = toga.QuestionDialog(title=title, message=message, on_result=callback)
+        dialog.show()
     
     def startup(self):
         self.main_window = toga.MainWindow(
@@ -287,7 +301,7 @@ class QuranApp(toga.App):
             level = self.level_input.value
             
             if not all([name, email, password, level]):
-                self.main_window.error_dialog("Error", "Please fill all fields")
+                self.show_error("Error", "Please fill all fields")
                 return
             
             response = requests.post(
@@ -298,14 +312,14 @@ class QuranApp(toga.App):
             )
             
             if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Student registration successful! Please login with your email.")
+                self.show_info("Success", "Student registration successful! Please login with your email.")
                 self.show_login_screen()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
+                self.show_error("Error", f"Registration failed: {error_msg}")
                 
         except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+            self.show_error("Error", f"Connection error: {str(e)}")
 
     def register_teacher(self, widget):
         try:
@@ -316,7 +330,7 @@ class QuranApp(toga.App):
             specialty = self.teacher_specialty.value.strip()
             
             if not all([username, password, full_name, email, specialty]):
-                self.main_window.error_dialog("Error", "Please fill all fields")
+                self.show_error("Error", "Please fill all fields")
                 return
             
             response = requests.post(
@@ -330,14 +344,14 @@ class QuranApp(toga.App):
             )
             
             if response.status_code == 200:
-                self.main_window.info_dialog("Success", "Teacher registration successful! Please login with your username.")
+                self.show_info("Success", "Teacher registration successful! Please login with your username.")
                 self.show_login_screen()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
-                self.main_window.error_dialog("Error", f"Registration failed: {error_msg}")
+                self.show_error("Error", f"Registration failed: {error_msg}")
                 
         except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+            self.show_error("Error", f"Connection error: {str(e)}")
 
     def login(self, widget):
         try:
@@ -345,7 +359,7 @@ class QuranApp(toga.App):
             password = self.password_input.value
             
             if not identifier or not password:
-                self.main_window.error_dialog("Error", "Please enter both username/email and password")
+                self.show_error("Error", "Please enter both username/email and password")
                 return
             
             response = requests.post(
@@ -374,16 +388,16 @@ class QuranApp(toga.App):
                     elif self.user_role == 'teacher':
                         self.show_teacher_dashboard(user_data)
                     else:
-                        self.main_window.info_dialog("Success", f"Login successful! Welcome {user_data['full_name']}")
+                        self.show_info("Success", f"Login successful! Welcome {user_data['full_name']}")
                 else:
-                    self.main_window.error_dialog("Error", "Failed to get user information")
+                    self.show_error("Error", "Failed to get user information")
                     
             else:
                 error_msg = response.json().get("detail", "Login failed")
-                self.main_window.error_dialog("Error", f"Login failed: {error_msg}")
+                self.show_error("Error", f"Login failed: {error_msg}")
                 
         except Exception as e:
-            self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
+            self.show_error("Error", f"Connection error: {str(e)}")
 
     def show_teacher_dashboard(self, user_data):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
@@ -525,36 +539,36 @@ class QuranApp(toga.App):
         if response and response.status_code == 200:
             courses = response.json().get('my_courses', [])
             courses_list = "\n".join([f"📖 {course['title']} - Progress: {course.get('progress', 0)}%" for course in courses])
-            self.main_window.info_dialog("My Courses", courses_list or "No courses enrolled")
+            self.show_info("My Courses", courses_list or "No courses enrolled")
         else:
-            self.main_window.error_dialog("Error", "Failed to load courses")
+            self.show_error("Error", "Failed to load courses")
 
     def show_teacher_classes(self, widget):
         response = self.make_authenticated_request("GET", "/teacher/courses")
         if response and response.status_code == 200:
             courses = response.json().get('courses', [])
             courses_list = "\n".join([f"🎯 {course['title']} - Students: {course.get('enrolled_students', 0)}" for course in courses])
-            self.main_window.info_dialog("My Classes", courses_list or "No classes created")
+            self.show_info("My Classes", courses_list or "No classes created")
         else:
-            self.main_window.error_dialog("Error", "Failed to load classes")
+            self.show_error("Error", "Failed to load classes")
 
     def create_class(self, widget):
-        self.main_window.info_dialog("Info", "Create class functionality will be implemented here")
+        self.show_info("Info", "Create class functionality will be implemented here")
 
     def show_student_progress(self, widget):
-        self.main_window.info_dialog("Progress", "Your progress report will appear here")
+        self.show_info("Progress", "Your progress report will appear here")
 
     def find_teachers(self, widget):
-        self.main_window.info_dialog("Find Teachers", "Available teachers list will appear here")
+        self.show_info("Find Teachers", "Available teachers list will appear here")
 
     def show_student_schedule(self, widget):
-        self.main_window.info_dialog("Schedule", "Your class schedule will appear here")
+        self.show_info("Schedule", "Your class schedule will appear here")
 
     def show_teacher_students(self, widget):
-        self.main_window.info_dialog("My Students", "List of your students will appear here")
+        self.show_info("My Students", "List of your students will appear here")
 
     def show_teacher_stats(self, widget):
-        self.main_window.info_dialog("Statistics", "Teaching statistics will appear here")
+        self.show_info("Statistics", "Teaching statistics will appear here")
 
 def main():
     return QuranApp()
