@@ -15,7 +15,7 @@ class QuranApp(toga.App):
         self.user_token = None
         self.user_role = None
         self.token_expiry = None
-        self.BASE_URL = "https://quran-academy-backend.onrender.com"
+        self.BASE_URL = "https://quran-app-kw38.onrender.com"
         print(f"🔗 Connecting to backend: {self.BASE_URL}")
         
     def get_auth_headers(self):
