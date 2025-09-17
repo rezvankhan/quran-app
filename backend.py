@@ -1,152 +1,24 @@
-# backend.py - کامل با JWT Authentication و بهبودهای ضروری
-from fastapi import FastAPI, HTTPException, Depends, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
-from pydantic import BaseModel
-from typing import Optional, List
+# creat_tables.py - کامل
 import sqlite3
 import os
-from datetime import datetime, timedelta
-from contextlib import asynccontextmanager
-import logging
-from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-# تنظیمات logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# تنظیمات JWT
-SECRET_KEY = "your-secret-key-please-change-in-production"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 3600  # 1 hour
-
-# Password hashing
+# استفاده از همان سیستم هش کردن backend.py
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
-
-# تشخیص محیط
-def get_db_connection():
-    if 'RENDER' in os.environ:
-        db_path = '/tmp/quran_db.sqlite3'
-    else:
-        db_path = 'quran_db.sqlite3'
-    
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-# تابع کمکی برای تبدیل Row به Dictionary
-def row_to_dict(row):
-    """تبدیل sqlite3.Row به dictionary"""
-    if row is None:
-        return None
-    return dict(row)
-
-def rows_to_dict_list(rows):
-    """تبدیل لیست sqlite3.Row به لیست dictionary"""
-    return [dict(row) for row in rows] if rows else []
-
-# توابع Authentication
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+def create_tables():
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-            )
-        return user_id
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-        )
-
-async def get_current_teacher(user_id: int = Depends(get_current_user)):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if not user or user['role'] != 'teacher':
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Teacher access required",
-        )
-    return user_id
-
-async def get_current_student(user_id: int = Depends(get_current_user)):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if not user or user['role'] != 'student':
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Student access required",
-        )
-    return user_id
-
-# مدل‌های داده
-class StudentRegister(BaseModel):
-    name: str
-    email: str
-    password: str
-    level: str
-
-class TeacherRegister(BaseModel):
-    username: str
-    password: str
-    full_name: str
-    email: str
-    specialty: str
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class CourseCreate(BaseModel):
-    title: str
-    description: str
-    level: str = "Beginner"
-    category: str
-    duration: int = 60
-    price: float = 0
-    max_students: int = 10
-    schedule: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-# ایجاد جداول و داده‌های تست
-def init_db():
-    try:
-        conn = get_db_connection()
+        if 'RENDER' in os.environ:
+            db_path = '/tmp/quran_db.sqlite3'
+        else:
+            db_path = 'quran_db.sqlite3'
+            
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # ایجاد جداول
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -212,488 +84,154 @@ def init_db():
             )
         """)
         
-        # اضافه کردن داده‌های تست اگر وجود ندارند
-        cursor.execute("SELECT COUNT(*) as count FROM users")
-        result = cursor.fetchone()
-        user_count = row_to_dict(result)['count'] if result else 0
-        
-        if user_count == 0:
-            logger.info("Adding test data to database...")
-            
-            # کاربران تست
-            test_users = [
-                ('admin@quran.com', get_password_hash('admin123'), 'admin', 'Admin User', 'admin@quran.com', '', True),
-                ('teacher1', get_password_hash('teacher123'), 'teacher', 'استاد احمد', 'teacher1@quran.com', 'Quran Recitation', True),
-                ('student1@quran.com', get_password_hash('student123'), 'student', 'دانشجو محمد', 'student1@quran.com', '', True),
-                ('student2@quran.com', get_password_hash('student123'), 'student', 'دانشجو فاطمه', 'student2@quran.com', '', True)
-            ]
-            
-            for user in test_users:
-                try:
-                    cursor.execute(
-                        "INSERT INTO users (username, password, role, full_name, email, specialty, approved) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        user
-                    )
-                    user_id = cursor.lastrowid
-                    
-                    if user[2] == 'student':
-                        cursor.execute(
-                            "INSERT INTO students (user_id, level) VALUES (?, ?)",
-                            (user_id, 'Beginner')
-                        )
-                    elif user[2] == 'teacher':
-                        cursor.execute(
-                            "INSERT INTO teachers (user_id, experience) VALUES (?, ?)",
-                            (user_id, '5 years experience')
-                        )
-                        
-                except sqlite3.IntegrityError as e:
-                    logger.warning(f"User already exists: {user[0]}")
-                    continue
-            
-            # کلاس‌های تست
-            cursor.execute("SELECT id FROM users WHERE username = 'teacher1'")
-            teacher_result = cursor.fetchone()
-            if teacher_result:
-                teacher_id = row_to_dict(teacher_result)['id']
-                
-                test_classes = [
-                    (teacher_id, 'Basic Quran Reading', 'Learn to read Quran from basics', 'Beginner', 'Recitation', 60, 0, 20, 'Mon, Wed, Fri 10:00-11:00'),
-                    (teacher_id, 'Tajweed Fundamentals', 'Learn proper pronunciation rules', 'Intermediate', 'Tajweed', 60, 0, 15, 'Tue, Thu 14:00-15:00'),
-                    (teacher_id, 'Advanced Recitation', 'Master Quran recitation', 'Advanced', 'Recitation', 90, 0, 10, 'Sat, Sun 09:00-10:30')
-                ]
-                
-                for class_data in test_classes:
-                    cursor.execute(
-                        "INSERT INTO classes (teacher_id, title, description, level, category, duration, price, max_students, schedule) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        class_data
-                    )
-                
-                # ثبت‌نام‌های تست
-                cursor.execute("SELECT id FROM users WHERE email = 'student1@quran.com'")
-                student1_result = cursor.fetchone()
-                cursor.execute("SELECT id FROM users WHERE email = 'student2@quran.com'")
-                student2_result = cursor.fetchone()
-                
-                if student1_result and student2_result:
-                    student1_id = row_to_dict(student1_result)['id']
-                    student2_id = row_to_dict(student2_result)['id']
-                    
-                    test_enrollments = [
-                        (student1_id, 1, 25),
-                        (student1_id, 2, 50),
-                        (student2_id, 1, 15)
-                    ]
-                    
-                    for enrollment in test_enrollments:
-                        try:
-                            cursor.execute(
-                                "INSERT INTO enrollments (student_id, class_id, progress) VALUES (?, ?, ?)",
-                                enrollment
-                            )
-                        except sqlite3.IntegrityError:
-                            continue
-            
-            conn.commit()
-            logger.info("Test data added successfully")
-        
-        conn.close()
-        logger.info("Database initialization completed successfully")
-        
-    except Exception as e:
-        logger.error(f"Database initialization error: {e}")
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    logger.info("Application startup complete")
-    yield
-    logger.info("Application shutdown")
-
-app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/")
-async def root():
-    return {"message": "Quran App API", "status": "running", "timestamp": datetime.now().isoformat()}
-
-@app.get("/health")
-async def health_check():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) as user_count FROM users")
-        result = cursor.fetchone()
-        user_count = row_to_dict(result)['user_count'] if result else 0
-        conn.close()
-        
-        return {
-            "status": "healthy", 
-            "timestamp": datetime.now().isoformat(),
-            "user_count": user_count,
-            "environment": "Render" if 'RENDER' in os.environ else "Local"
-        }
-    except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
-
-@app.get("/debug/users")
-async def debug_users():
-    """Endpoint برای دیباگ کاربران"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, username, email, role, full_name FROM users")
-        users = cursor.fetchall()
-        conn.close()
-        
-        return {"users": rows_to_dict_list(users)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/admin/reset-passwords")
-async def reset_passwords():
-    """ریست کردن پسورد همه کاربران به مقدار پیش‌فرض"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # پسوردهای پیش‌فرض
-        default_passwords = {
-            "admin@quran.com": "admin123",
-            "teacher1": "teacher123", 
-            "student1@quran.com": "student123",
-            "student2@quran.com": "student123"
-        }
-        
-        updated_count = 0
-        for username, password in default_passwords.items():
-            hashed_password = get_password_hash(password)
-            cursor.execute(
-                "UPDATE users SET password = ? WHERE username = ?",
-                (hashed_password, username)
-            )
-            if cursor.rowcount > 0:
-                updated_count += 1
-                logger.info(f"Reset password for {username}")
-        
         conn.commit()
         conn.close()
+        print("✅ Database tables created successfully")
         
-        return {
-            "success": True, 
-            "message": f"Passwords reset successfully for {updated_count} users",
-            "updated_count": updated_count
-        }
-        
-    except Exception as e:
-        logger.error(f"Password reset error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as err:
+        print(f"❌ Error creating tables: {err}")
 
-@app.post("/register/student")
-async def register_student(student: StudentRegister):
+def init_sample_data():
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        hashed_password = get_password_hash(student.password)
-        logger.info(f"Registering student: {student.email}")
-        
-        cursor.execute(
-            "INSERT INTO users (username, password, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
-            (student.email, hashed_password, student.name, student.email, 'student')
-        )
-        
-        user_id = cursor.lastrowid
-        
-        cursor.execute(
-            "INSERT INTO students (user_id, level) VALUES (?, ?)",
-            (user_id, student.level)
-        )
-        
-        conn.commit()
-        conn.close()
-        
-        return {"message": "Student registered successfully", "user_id": user_id, "success": True}
-        
-    except sqlite3.IntegrityError:
-        raise HTTPException(status_code=400, detail="Email already exists")
-    except Exception as e:
-        logger.error(f"Student registration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/register/teacher")
-async def register_teacher(teacher: TeacherRegister):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        hashed_password = get_password_hash(teacher.password)
-        logger.info(f"Registering teacher: {teacher.username}")
-        
-        cursor.execute(
-            "INSERT INTO users (username, password, full_name, email, specialty, role) VALUES (?, ?, ?, ?, ?, ?)",
-            (teacher.username, hashed_password, teacher.full_name, teacher.email, teacher.specialty, 'teacher')
-        )
-        
-        user_id = cursor.lastrowid
-        
-        cursor.execute(
-            "INSERT INTO teachers (user_id) VALUES (?)",
-            (user_id,)
-        )
-        
-        conn.commit()
-        conn.close()
-        
-        return {"message": "Teacher registered successfully", "user_id": user_id, "success": True}
-        
-    except sqlite3.IntegrityError:
-        raise HTTPException(status_code=400, detail="Username or email already exists")
-    except Exception as e:
-        logger.error(f"Teacher registration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/login")
-async def login(login_data: LoginRequest):
-    try:
-        logger.info(f"Login attempt: username={login_data.username}")
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "SELECT * FROM users WHERE username = ? OR email = ?",
-            (login_data.username, login_data.username)
-        )
-        
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user and verify_password(login_data.password, user['password']):
-            user_dict = row_to_dict(user)
-            
-            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-            access_token = create_access_token(
-                data={"user_id": user_dict['id'], "sub": user_dict['username']},
-                expires_delta=access_token_expires
-            )
-            
-            logger.info(f"Login successful for user: {user_dict['username']}")
-            return {
-                "access_token": access_token,
-                "token_type": "bearer"
-            }
+        if 'RENDER' in os.environ:
+            db_path = '/tmp/quran_db.sqlite3'
         else:
-            logger.warning("Login failed: Invalid credentials")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            db_path = 'quran_db.sqlite3'
             
-    except Exception as e:
-        logger.error(f"Login error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/users/me")
-async def read_users_me(current_user: int = Depends(get_current_user)):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE id = ?", (current_user,))
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user:
-            user_dict = row_to_dict(user)
-            return {
-                "id": user_dict['id'],
-                "username": user_dict['username'],
-                "full_name": user_dict['full_name'],
-                "email": user_dict['email'],
-                "role": user_dict['role'],
-                "specialty": user_dict.get('specialty', ''),
-                "approved": bool(user_dict['approved'])
-            }
-        raise HTTPException(status_code=404, detail="User not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/courses")
-async def get_courses():
-    try:
-        conn = get_db_connection()
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT c.*, u.full_name as teacher_name 
-            FROM classes c 
-            JOIN users u ON c.teacher_id = u.id 
-            WHERE c.status = 'active'
-        """)
+        # بررسی اگر داده‌ها قبلاً وجود دارند
+        cursor.execute("SELECT COUNT(*) FROM users")
+        count = cursor.fetchone()[0]
         
-        courses = cursor.fetchall()
-        conn.close()
+        if count > 0:
+            print("⚠️  Data already exists, skipping sample data insertion")
+            conn.close()
+            return
         
-        return {"courses": rows_to_dict_list(courses)}
+        # اضافه کردن داده‌های نمونه
+        users = [
+            ('admin@quran.com', get_password_hash('admin123'), 'admin', 'مدیر سیستم', 'admin@quran.com', '', True),
+            ('teacher1', get_password_hash('teacher123'), 'teacher', 'استاد احمد', 'teacher1@quran.com', 'Quran Recitation', True),
+            ('student1@quran.com', get_password_hash('student123'), 'student', 'دانشجو محمد', 'student1@quran.com', '', True),
+            ('student2@quran.com', get_password_hash('student123'), 'student', 'دانشجو فاطمه', 'student2@quran.com', '', True)
+        ]
         
-    except Exception as e:
-        logger.error(f"Get courses error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/my-courses")
-async def get_my_courses(current_user: int = Depends(get_current_user)):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT c.*, u.full_name as teacher_name, e.progress, e.enrolled_at
-            FROM classes c
-            JOIN enrollments e ON c.id = e.class_id
-            JOIN users u ON c.teacher_id = u.id
-            WHERE e.student_id = ? AND e.status = 'active'
-        """, (current_user,))
-        
-        courses = cursor.fetchall()
-        conn.close()
-        
-        return {"my_courses": rows_to_dict_list(courses)}
-        
-    except Exception as e:
-        logger.error(f"Get my courses error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/enroll/{class_id}")
-async def enroll_student(class_id: int, current_user: int = Depends(get_current_user)):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT * FROM classes WHERE id = ? AND status = 'active'", (class_id,))
-        class_data = cursor.fetchone()
-        
-        if not class_data:
-            raise HTTPException(status_code=404, detail="Class not found")
-        
-        cursor.execute("SELECT * FROM users WHERE id = ? AND role = 'student'", (current_user,))
-        student = cursor.fetchone()
-        
-        if not student:
-            raise HTTPException(status_code=403, detail="Only students can enroll in classes")
-        
-        cursor.execute(
-            "SELECT * FROM enrollments WHERE student_id = ? AND class_id = ?",
-            (current_user, class_id)
-        )
-        existing = cursor.fetchone()
-        
-        if existing:
-            raise HTTPException(status_code=400, detail="Already enrolled in this class")
-        
-        cursor.execute(
-            "INSERT INTO enrollments (student_id, class_id, status) VALUES (?, ?, 'active')",
-            (current_user, class_id)
-        )
-        
-        conn.commit()
-        conn.close()
-        
-        return {"success": True, "message": "Enrollment successful"}
-        
-    except Exception as e:
-        logger.error(f"Enrollment error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/users")
-async def get_users():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT id, username, full_name, email, role, approved FROM users")
-        users = cursor.fetchall()
-        
-        conn.close()
-        
-        return {"users": rows_to_dict_list(users)}
-        
-    except Exception as e:
-        logger.error(f"Get users error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/teacher/courses")
-async def create_course(
-    course_data: CourseCreate, 
-    current_user: int = Depends(get_current_teacher)
-):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            """
-            INSERT INTO classes (teacher_id, title, description, level, category, duration, price, max_students, schedule)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                current_user,
-                course_data.title,
-                course_data.description,
-                course_data.level,
-                course_data.category,
-                course_data.duration,
-                course_data.price,
-                course_data.max_students,
-                course_data.schedule
+        user_ids = []
+        for user in users:
+            cursor.execute(
+                "INSERT INTO users (username, password, role, full_name, email, specialty, approved) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                user
             )
-        )
+            user_ids.append(cursor.lastrowid)
+        
+        # دانشجویان
+        cursor.execute("INSERT INTO students (user_id, level) VALUES (?, ?)", (user_ids[2], 'Intermediate'))
+        cursor.execute("INSERT INTO students (user_id, level) VALUES (?, ?)", (user_ids[3], 'Beginner'))
+        
+        # معلمان
+        cursor.execute("INSERT INTO teachers (user_id, experience) VALUES (?, ?)", (user_ids[1], '5 years experience'))
+        
+        # کلاس‌های نمونه
+        classes = [
+            (user_ids[1], 'Basic Quran Reading', 'Learn to read Quran from basics', 'Beginner', 'Recitation', 60, 0, 20, 'Mon, Wed, Fri 10:00-11:00'),
+            (user_ids[1], 'Tajweed Fundamentals', 'Learn proper pronunciation rules', 'Intermediate', 'Tajweed', 60, 0, 15, 'Tue, Thu 14:00-15:00'),
+            (user_ids[1], 'Advanced Recitation', 'Master Quran recitation', 'Advanced', 'Recitation', 90, 0, 10, 'Sat, Sun 09:00-10:30')
+        ]
+        
+        class_ids = []
+        for class_data in classes:
+            cursor.execute(
+                "INSERT INTO classes (teacher_id, title, description, level, category, duration, price, max_students, schedule) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                class_data
+            )
+            class_ids.append(cursor.lastrowid)
+        
+        # ثبت‌نام‌های نمونه
+        enrollments = [
+            (user_ids[2], class_ids[0], 25),
+            (user_ids[2], class_ids[1], 50),
+            (user_ids[3], class_ids[0], 15)
+        ]
+        
+        for enrollment in enrollments:
+            try:
+                cursor.execute(
+                    "INSERT INTO enrollments (student_id, class_id, progress) VALUES (?, ?, ?)",
+                    enrollment
+                )
+            except sqlite3.IntegrityError:
+                print(f"⚠️  Duplicate enrollment skipped: {enrollment}")
+                continue
         
         conn.commit()
-        course_id = cursor.lastrowid
         conn.close()
+        print("✅ Sample data inserted successfully")
+        print("\n📋 Sample Login Credentials:")
+        print("Admin: admin@quran.com / admin123")
+        print("Teacher: teacher1 / teacher123")
+        print("Student 1: student1@quran.com / student123")
+        print("Student 2: student2@quran.com / student123")
         
-        return {
-            "success": True, 
-            "course_id": course_id, 
-            "message": "Course created successfully"
-        }
-        
-    except Exception as e:
-        logger.error(f"Error creating course: {e}")
-        raise HTTPException(status_code=500, detail=f"Error creating course: {str(e)}")
+    except Exception as err:
+        print(f"❌ Error inserting sample data: {err}")
 
-@app.get("/teacher/courses")
-async def get_teacher_courses(current_user: int = Depends(get_current_teacher)):
+def check_existing_data():
+    """بررسی وجود داده در دیتابیس"""
     try:
-        conn = get_db_connection()
+        if 'RENDER' in os.environ:
+            db_path = '/tmp/quran_db.sqlite3'
+        else:
+            db_path = 'quran_db.sqlite3'
+            
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT c.*, COUNT(e.id) as enrolled_students
-            FROM classes c
-            LEFT JOIN enrollments e ON c.id = e.class_id
-            WHERE c.teacher_id = ?
-            GROUP BY c.id
-        """, (current_user,))
+        cursor.execute("SELECT COUNT(*) FROM users")
+        user_count = cursor.fetchone()[0]
         
-        courses = cursor.fetchall()
+        cursor.execute("SELECT COUNT(*) FROM classes")
+        class_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM enrollments")
+        enrollment_count = cursor.fetchone()[0]
+        
         conn.close()
         
-        return {"courses": rows_to_dict_list(courses)}
+        print(f"📊 Current database status:")
+        print(f"   Users: {user_count}")
+        print(f"   Classes: {class_count}")
+        print(f"   Enrollments: {enrollment_count}")
         
-    except Exception as e:
-        logger.error(f"Get teacher courses error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return user_count > 0
+        
+    except Exception as err:
+        print(f"❌ Error checking database: {err}")
+        return False
 
 if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    print("🚀 Starting database setup...")
+    
+    # بررسی وجود داده‌ها
+    has_data = check_existing_data()
+    
+    if has_data:
+        print("\n⚠️  Database already has data. Do you want to:")
+        print("1. Recreate tables and insert sample data (ALL DATA WILL BE LOST!)")
+        print("2. Skip data insertion")
+        
+        choice = input("Enter your choice (1 or 2): ").strip()
+        
+        if choice == "1":
+            # پاک کردن و ایجاد مجدد
+            create_tables()
+            init_sample_data()
+        else:
+            print("✅ Skipping data insertion")
+    else:
+        # ایجاد جداول و داده‌های نمونه
+        create_tables()
+        init_sample_data()
+    
+    print("✅ Database setup completed!")
