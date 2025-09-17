@@ -15,7 +15,8 @@ class QuranApp(toga.App):
         self.user_token = None
         self.user_role = None
         self.token_expiry = None
-    
+        self.BASE_URL = "http://localhost:8000"  # تغییر به آدرس سرور واقعی
+        
     def get_auth_headers(self):
         """دریافت هدرهای احراز هویت"""
         headers = {"Content-Type": "application/json"}
@@ -30,7 +31,7 @@ class QuranApp(toga.App):
         return datetime.now() < self.token_expiry
     
     def logout(self, widget=None):
-        """خروج ازシステム"""
+        """خروج از سیستم"""
         self.current_user = None
         self.user_token = None
         self.user_role = None
@@ -38,14 +39,16 @@ class QuranApp(toga.App):
         self.show_login_screen()
         self.main_window.info_dialog("Info", "Logged out successfully")
     
-    def make_authenticated_request(self, method, url, **kwargs):
+    def make_authenticated_request(self, method, endpoint, **kwargs):
         """انجام درخواست با احراز هویت"""
         if not self.is_token_valid():
             self.main_window.info_dialog("Session Expired", "Please login again")
             self.logout()
             return None
         
+        url = f"{self.BASE_URL}{endpoint}"
         headers = self.get_auth_headers()
+        
         if 'headers' in kwargs:
             kwargs['headers'].update(headers)
         else:
@@ -54,6 +57,9 @@ class QuranApp(toga.App):
         try:
             response = requests.request(method, url, **kwargs, timeout=30)
             return response
+        except requests.exceptions.ConnectionError:
+            self.main_window.error_dialog("Connection Error", "Cannot connect to server. Please check if the server is running.")
+            return None
         except Exception as e:
             self.main_window.error_dialog("Error", f"Connection error: {str(e)}")
             return None
@@ -289,7 +295,7 @@ class QuranApp(toga.App):
                 return
             
             response = requests.post(
-                "https://your-render-app.onrender.com/api/register/student",
+                f"{self.BASE_URL}/register/student",
                 json={"name": name, "email": email, "password": password, "level": level},
                 headers={"Content-Type": "application/json"},
                 timeout=30
@@ -319,7 +325,7 @@ class QuranApp(toga.App):
                 return
             
             response = requests.post(
-                "https://your-render-app.onrender.com/api/register/teacher",
+                f"{self.BASE_URL}/register/teacher",
                 json={
                     "username": username, "password": password, 
                     "full_name": full_name, "email": email, "specialty": specialty
@@ -348,7 +354,7 @@ class QuranApp(toga.App):
                 return
             
             response = requests.post(
-                "https://your-render-app.onrender.com/api/login",
+                f"{self.BASE_URL}/api/login",
                 json={"username": identifier, "password": password},
                 headers={"Content-Type": "application/json"},
                 timeout=30
@@ -363,7 +369,7 @@ class QuranApp(toga.App):
                 
                 # دریافت اطلاعات کاربر با توکن
                 user_response = self.make_authenticated_request(
-                    "GET", "https://your-render-app.onrender.com/api/users/me"
+                    "GET", "/users/me"
                 )
                 
                 if user_response and user_response.status_code == 200:
@@ -375,6 +381,8 @@ class QuranApp(toga.App):
                         self.show_student_dashboard(user_data)
                     elif self.user_role == 'teacher':
                         self.show_teacher_dashboard(user_data)
+                    elif self.user_role == 'admin':
+                        self.show_admin_dashboard(user_data)
                     else:
                         self.main_window.info_dialog("Success", f"Login successful! Welcome {user_data['full_name']}")
                 else:
@@ -391,14 +399,14 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
         # هدر
-        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="green", alignment=CENTER))
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#0D8E3D", alignment=CENTER))
         header_icon = toga.Label(
             "👨‍🏫",
-            style=Pack(font_size=24, padding_right=10, color="#87CEEB")
+            style=Pack(font_size=24, padding_right=10, color="white")
         )
         header_text = toga.Label(
             f"Teacher: {user_data['full_name']}",
-            style=Pack(color="blue", font_size=18, font_weight="bold", flex=1)
+            style=Pack(color="white", font_size=18, font_weight="bold", flex=1)
         )
         logout_btn = toga.Button(
             "🚪 Logout",
@@ -471,14 +479,14 @@ class QuranApp(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
         
         # هدر
-        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="green", alignment=CENTER))
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#0D8E3D", alignment=CENTER))
         header_icon = toga.Label(
             "👨‍🎓",
-            style=Pack(font_size=24, padding_right=10, color="#87CEEB")
+            style=Pack(font_size=24, padding_right=10, color="white")
         )
         header_text = toga.Label(
             f"Student: {user_data['full_name']}",
-            style=Pack(color="blue", font_size=18, font_weight="bold", flex=1)
+            style=Pack(color="white", font_size=18, font_weight="bold", flex=1)
         )
         logout_btn = toga.Button(
             "🚪 Logout",
@@ -524,10 +532,50 @@ class QuranApp(toga.App):
         main_box.add(content_box)
         self.main_window.content = main_box
 
+    def show_admin_dashboard(self, user_data):
+        """داشبورد مدیریت"""
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
+        
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#607D8B", alignment=CENTER))
+        header_icon = toga.Label(
+            "👑",
+            style=Pack(font_size=24, padding_right=10, color="white")
+        )
+        header_text = toga.Label(
+            f"Admin: {user_data['full_name']}",
+            style=Pack(color="white", font_size=18, font_weight="bold", flex=1)
+        )
+        logout_btn = toga.Button(
+            "🚪 Logout",
+            on_press=self.logout,
+            style=Pack(padding=8, background_color="#f44336", color="white")
+        )
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        header_box.add(logout_btn)
+        main_box.add(header_box)
+        
+        content_box = toga.Box(style=Pack(direction=COLUMN, padding=20, alignment=CENTER))
+        
+        content_box.add(toga.Button(
+            "👥 Manage Users", 
+            on_press=self.manage_users,
+            style=Pack(padding=15, width=200, background_color="#2196F3", color="white")
+        ))
+        
+        content_box.add(toga.Button(
+            "📊 System Stats", 
+            on_press=self.system_stats,
+            style=Pack(padding=15, width=200, background_color="#4CAF50", color="white")
+        ))
+        
+        main_box.add(content_box)
+        self.main_window.content = main_box
+
     def show_student_courses(self, widget):
         """نمایش دوره‌های دانشجو"""
         response = self.make_authenticated_request(
-            "GET", "https://your-render-app.onrender.com/api/my-courses"
+            "GET", "/my-courses"
         )
         
         if response and response.status_code == 200:
@@ -541,7 +589,7 @@ class QuranApp(toga.App):
     def show_teacher_classes(self, widget):
         """نمایش کلاس‌های معلم"""
         response = self.make_authenticated_request(
-            "GET", "https://your-render-app.onrender.com/api/teacher/courses"
+            "GET", "/teacher/courses"
         )
         
         if response and response.status_code == 200:
@@ -630,7 +678,7 @@ class QuranApp(toga.App):
             
             response = self.make_authenticated_request(
                 "POST", 
-                "https://your-render-app.onrender.com/api/teacher/courses",
+                "/teacher/courses",
                 json=course_data
             )
             
@@ -645,23 +693,83 @@ class QuranApp(toga.App):
             self.main_window.error_dialog("Error", f"Error creating course: {str(e)}")
 
     def show_student_progress(self, widget):
-        self.main_window.info_dialog("Progress", "Your progress report will appear here")
+        """نمایش پیشرفت دانشجو"""
+        response = self.make_authenticated_request("GET", "/my-courses")
+        if response and response.status_code == 200:
+            courses = response.json().get('my_courses', [])
+            progress_text = "\n".join([f"📊 {course['title']}: {course.get('progress', 0)}%" for course in courses])
+            self.main_window.info_dialog("My Progress", progress_text or "No progress data available")
+        else:
+            self.main_window.error_dialog("Error", "Failed to load progress data")
 
     def find_teachers(self, widget):
-        self.main_window.info_dialog("Find Teachers", "Available teachers list will appear here")
+        """یافتن معلمان"""
+        response = requests.get(f"{self.BASE_URL}/users")
+        if response and response.status_code == 200:
+            users = response.json().get('users', [])
+            teachers = [user for user in users if user.get('role') == 'teacher']
+            teachers_list = "\n".join([f"👨‍🏫 {teacher['full_name']} - {teacher.get('specialty', 'General')}" for teacher in teachers])
+            self.main_window.info_dialog("Available Teachers", teachers_list or "No teachers available")
+        else:
+            self.main_window.error_dialog("Error", "Failed to load teachers list")
 
     def show_student_schedule(self, widget):
-        self.main_window.info_dialog("Schedule", "Your class schedule will appear here")
+        """نمایش برنامه زمانی دانشجو"""
+        response = self.make_authenticated_request("GET", "/my-courses")
+        if response and response.status_code == 200:
+            courses = response.json().get('my_courses', [])
+            schedule_text = "\n".join([f"📅 {course['title']}: {course.get('schedule', 'No schedule')}" for course in courses])
+            self.main_window.info_dialog("My Schedule", schedule_text or "No schedule available")
+        else:
+            self.main_window.error_dialog("Error", "Failed to load schedule")
 
     def show_teacher_students(self, widget):
-        self.main_window.info_dialog("My Students", "List of your students will appear here")
+        """نمایش دانشجویان معلم"""
+        response = self.make_authenticated_request("GET", "/teacher/courses")
+        if response and response.status_code == 200:
+            courses = response.json().get('courses', [])
+            students_info = []
+            for course in courses:
+                students_info.append(f"📚 {course['title']}: {course.get('enrolled_students', 0)} students")
+            self.main_window.info_dialog("My Students", "\n".join(students_info) or "No students enrolled")
+        else:
+            self.main_window.error_dialog("Error", "Failed to load students information")
 
     def show_teacher_stats(self, widget):
-        self.main_window.info_dialog("Statistics", "Teaching statistics will appear here")
+        """نمایش آمار معلم"""
+        response = self.make_authenticated_request("GET", "/teacher/courses")
+        if response and response.status_code == 200:
+            courses = response.json().get('courses', [])
+            total_students = sum(course.get('enrolled_students', 0) for course in courses)
+            total_courses = len(courses)
+            stats_text = f"📊 Teaching Statistics:\n\nTotal Courses: {total_courses}\nTotal Students: {total_students}"
+            self.main_window.info_dialog("Statistics", stats_text)
+        else:
+            self.main_window.error_dialog("Error", "Failed to load statistics")
+
+    def manage_users(self, widget):
+        """مدیریت کاربران (برای ادمین)"""
+        response = requests.get(f"{self.BASE_URL}/users")
+        if response and response.status_code == 200:
+            users = response.json().get('users', [])
+            users_list = "\n".join([f"👤 {user['full_name']} ({user['role']}) - {user['email']}" for user in users])
+            self.main_window.info_dialog("All Users", users_list or "No users found")
+        else:
+            self.main_window.error_dialog("Error", "Failed to load users")
+
+    def system_stats(self, widget):
+        """آمار سیستم (برای ادمین)"""
+        response = requests.get(f"{self.BASE_URL}/health")
+        if response and response.status_code == 200:
+            stats = response.json()
+            stats_text = f"🏥 System Health:\n\nStatus: {stats.get('status', 'Unknown')}\nUsers: {stats.get('user_count', 0)}\nEnvironment: {stats.get('environment', 'Unknown')}"
+            self.main_window.info_dialog("System Stats", stats_text)
+        else:
+            self.main_window.error_dialog("Error", "Failed to load system stats")
 
 def main():
     return QuranApp()
 
 if __name__ == "__main__":
     app = main()
-    app.main_loop()     Frontend-toga.py این
+    app.main_loop()
