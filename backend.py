@@ -1,4 +1,4 @@
-# backend.py - کامل با JWT Authentication و بهبودهای ضروری
+# backend.py - کامل با کیف پول، آزمون و پرداخت
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 import logging
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import json
 
 # تنظیمات logging
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 # تنظیمات JWT
 SECRET_KEY = "your-secret-key-please-change-in-production"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 3600  # 1 hour
+ACCESS_TOKEN_EXPIRE_MINUTES = 3600
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -36,15 +37,12 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-# تابع کمکی برای تبدیل Row به Dictionary
 def row_to_dict(row):
-    """تبدیل sqlite3.Row به dictionary"""
     if row is None:
         return None
     return dict(row)
 
 def rows_to_dict_list(rows):
-    """تبدیل لیست sqlite3.Row به لیست dictionary"""
     return [dict(row) for row in rows] if rows else []
 
 # توابع Authentication
@@ -72,29 +70,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-        return user_id
-    except JWTError:
-        raise credentials_exception
-
-async def get_current_user_id(token: str = Depends(oauth2_scheme)):
-    """تابع جدید برای دریافت user_id از توکن"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: int = payload.get("user_id")
         username: str = payload.get("sub")
         
         if user_id is None or username is None:
             raise credentials_exception
             
-        # بررسی وجود کاربر در دیتابیس
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM users WHERE id = ? AND username = ?", (user_id, username))
@@ -108,7 +89,7 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
 
-async def get_current_teacher(user_id: int = Depends(get_current_user_id)):
+async def get_current_teacher(user_id: int = Depends(get_current_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
@@ -122,7 +103,7 @@ async def get_current_teacher(user_id: int = Depends(get_current_user_id)):
         )
     return user_id
 
-async def get_current_student(user_id: int = Depends(get_current_user_id)):
+async def get_current_student(user_id: int = Depends(get_current_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
@@ -164,6 +145,24 @@ class CourseCreate(BaseModel):
     max_students: int = 10
     schedule: str
 
+class WalletCreate(BaseModel):
+    balance: float = 0.0
+
+class PaymentCreate(BaseModel):
+    amount: float
+    description: str = "Deposit"
+
+class ExamCreate(BaseModel):
+    class_id: int
+    title: str
+    description: str
+    questions: List[dict]
+    duration: int = 60
+
+class ExamSubmit(BaseModel):
+    exam_id: int
+    answers: List[dict]
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -184,6 +183,7 @@ def init_db():
                 full_name TEXT,
                 email TEXT UNIQUE,
                 specialty TEXT,
+                wallet_balance DECIMAL(10,2) DEFAULT 0,
                 approved BOOLEAN DEFAULT TRUE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -240,6 +240,47 @@ def init_db():
             )
         """)
         
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                type TEXT NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS exams (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                class_id INTEGER NOT NULL,
+                teacher_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                questions TEXT,
+                duration INTEGER DEFAULT 60,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (class_id) REFERENCES classes (id),
+                FOREIGN KEY (teacher_id) REFERENCES users (id)
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS exam_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exam_id INTEGER NOT NULL,
+                student_id INTEGER NOT NULL,
+                score INTEGER,
+                answers TEXT,
+                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (exam_id) REFERENCES exams (id),
+                FOREIGN KEY (student_id) REFERENCES users (id),
+                UNIQUE(exam_id, student_id)
+            )
+        """)
+        
         # اضافه کردن داده‌های تست اگر وجود ندارند
         cursor.execute("SELECT COUNT(*) as count FROM users")
         result = cursor.fetchone()
@@ -248,18 +289,17 @@ def init_db():
         if user_count == 0:
             logger.info("Adding test data to database...")
             
-            # کاربران تست
             test_users = [
-                ('admin@quran.com', get_password_hash('admin123'), 'admin', 'Admin User', 'admin@quran.com', '', True),
-                ('teacher1', get_password_hash('teacher123'), 'teacher', 'استاد احمد', 'teacher1@quran.com', 'Quran Recitation', True),
-                ('student1@quran.com', get_password_hash('student123'), 'student', 'دانشجو محمد', 'student1@quran.com', '', True),
-                ('student2@quran.com', get_password_hash('student123'), 'student', 'دانشجو فاطمه', 'student2@quran.com', '', True)
+                ('admin@quran.com', get_password_hash('admin123'), 'admin', 'Admin User', 'admin@quran.com', '', 100, True),
+                ('teacher1', get_password_hash('teacher123'), 'teacher', 'استاد احمد', 'teacher1@quran.com', 'Quran Recitation', 500, True),
+                ('student1@quran.com', get_password_hash('student123'), 'student', 'دانشجو محمد', 'student1@quran.com', '', 50, True),
+                ('student2@quran.com', get_password_hash('student123'), 'student', 'دانشجو فاطمه', 'student2@quran.com', '', 75, True)
             ]
             
             for user in test_users:
                 try:
                     cursor.execute(
-                        "INSERT INTO users (username, password, role, full_name, email, specialty, approved) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO users (username, password, role, full_name, email, specialty, wallet_balance, approved) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         user
                     )
                     user_id = cursor.lastrowid
@@ -279,7 +319,6 @@ def init_db():
                     logger.warning(f"User already exists: {user[0]}")
                     continue
             
-            # کلاس‌های تست
             cursor.execute("SELECT id FROM users WHERE username = 'teacher1'")
             teacher_result = cursor.fetchone()
             if teacher_result:
@@ -287,8 +326,8 @@ def init_db():
                 
                 test_classes = [
                     (teacher_id, 'Basic Quran Reading', 'Learn to read Quran from basics', 'Beginner', 'Recitation', 60, 0, 20, 'Mon, Wed, Fri 10:00-11:00'),
-                    (teacher_id, 'Tajweed Fundamentals', 'Learn proper pronunciation rules', 'Intermediate', 'Tajweed', 60, 0, 15, 'Tue, Thu 14:00-15:00'),
-                    (teacher_id, 'Advanced Recitation', 'Master Quran recitation', 'Advanced', 'Recitation', 90, 0, 10, 'Sat, Sun 09:00-10:30')
+                    (teacher_id, 'Tajweed Fundamentals', 'Learn proper pronunciation rules', 'Intermediate', 'Tajweed', 60, 25, 15, 'Tue, Thu 14:00-15:00'),
+                    (teacher_id, 'Advanced Recitation', 'Master Quran recitation', 'Advanced', 'Recitation', 90, 50, 10, 'Sat, Sun 09:00-10:30')
                 ]
                 
                 for class_data in test_classes:
@@ -297,7 +336,6 @@ def init_db():
                         class_data
                     )
                 
-                # ثبت‌نام‌های تست
                 cursor.execute("SELECT id FROM users WHERE email = 'student1@quran.com'")
                 student1_result = cursor.fetchone()
                 cursor.execute("SELECT id FROM users WHERE email = 'student2@quran.com'")
@@ -373,11 +411,10 @@ async def health_check():
 
 @app.get("/debug/users")
 async def debug_users():
-    """Endpoint برای دیباگ کاربران"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, email, role, full_name FROM users")
+        cursor.execute("SELECT id, username, email, role, full_name, wallet_balance FROM users")
         users = cursor.fetchall()
         conn.close()
         
@@ -387,12 +424,10 @@ async def debug_users():
 
 @app.post("/admin/reset-passwords")
 async def reset_passwords():
-    """ریست کردن پسورد همه کاربران به مقدار پیش‌فرض"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # پسوردهای پیش‌فرض
         default_passwords = {
             "admin@quran.com": "admin123",
             "teacher1": "teacher123", 
@@ -534,11 +569,11 @@ async def login(login_data: LoginRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/users/me")
-async def read_users_me(current_user_id: int = Depends(get_current_user_id)):
+async def read_users_me(current_user: int = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE id = ?", (current_user_id,))
+        cursor.execute("SELECT * FROM users WHERE id = ?", (current_user,))
         user = cursor.fetchone()
         conn.close()
         
@@ -551,6 +586,7 @@ async def read_users_me(current_user_id: int = Depends(get_current_user_id)):
                 "email": user_dict['email'],
                 "role": user_dict['role'],
                 "specialty": user_dict.get('specialty', ''),
+                "wallet_balance": user_dict.get('wallet_balance', 0),
                 "approved": bool(user_dict['approved'])
             }
         raise HTTPException(status_code=404, detail="User not found")
@@ -580,7 +616,7 @@ async def get_courses():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/my-courses")
-async def get_my_courses(current_user_id: int = Depends(get_current_user_id)):
+async def get_my_courses(current_user: int = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -591,7 +627,7 @@ async def get_my_courses(current_user_id: int = Depends(get_current_user_id)):
             JOIN enrollments e ON c.id = e.class_id
             JOIN users u ON c.teacher_id = u.id
             WHERE e.student_id = ? AND e.status = 'active'
-        """, (current_user_id,))
+        """, (current_user,))
         
         courses = cursor.fetchall()
         conn.close()
@@ -603,7 +639,7 @@ async def get_my_courses(current_user_id: int = Depends(get_current_user_id)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/enroll/{class_id}")
-async def enroll_student(class_id: int, current_user_id: int = Depends(get_current_user_id)):
+async def enroll_student(class_id: int, current_user: int = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -614,7 +650,7 @@ async def enroll_student(class_id: int, current_user_id: int = Depends(get_curre
         if not class_data:
             raise HTTPException(status_code=404, detail="Class not found")
         
-        cursor.execute("SELECT * FROM users WHERE id = ? AND role = 'student'", (current_user_id,))
+        cursor.execute("SELECT * FROM users WHERE id = ? AND role = 'student'", (current_user,))
         student = cursor.fetchone()
         
         if not student:
@@ -622,7 +658,7 @@ async def enroll_student(class_id: int, current_user_id: int = Depends(get_curre
         
         cursor.execute(
             "SELECT * FROM enrollments WHERE student_id = ? AND class_id = ?",
-            (current_user_id, class_id)
+            (current_user, class_id)
         )
         existing = cursor.fetchone()
         
@@ -631,7 +667,7 @@ async def enroll_student(class_id: int, current_user_id: int = Depends(get_curre
         
         cursor.execute(
             "INSERT INTO enrollments (student_id, class_id, status) VALUES (?, ?, 'active')",
-            (current_user_id, class_id)
+            (current_user, class_id)
         )
         
         conn.commit()
@@ -649,7 +685,7 @@ async def get_users():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT id, username, full_name, email, role, approved FROM users")
+        cursor.execute("SELECT id, username, full_name, email, role, approved, wallet_balance FROM users")
         users = cursor.fetchall()
         
         conn.close()
@@ -663,7 +699,7 @@ async def get_users():
 @app.post("/teacher/courses")
 async def create_course(
     course_data: CourseCreate, 
-    current_user_id: int = Depends(get_current_teacher)
+    current_user: int = Depends(get_current_teacher)
 ):
     try:
         conn = get_db_connection()
@@ -675,7 +711,7 @@ async def create_course(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                current_user_id,
+                current_user,
                 course_data.title,
                 course_data.description,
                 course_data.level,
@@ -702,7 +738,7 @@ async def create_course(
         raise HTTPException(status_code=500, detail=f"Error creating course: {str(e)}")
 
 @app.get("/teacher/courses")
-async def get_teacher_courses(current_user_id: int = Depends(get_current_teacher)):
+async def get_teacher_courses(current_user: int = Depends(get_current_teacher)):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -713,7 +749,7 @@ async def get_teacher_courses(current_user_id: int = Depends(get_current_teacher
             LEFT JOIN enrollments e ON c.id = e.class_id
             WHERE c.teacher_id = ?
             GROUP BY c.id
-        """, (current_user_id,))
+        """, (current_user,))
         
         courses = cursor.fetchall()
         conn.close()
@@ -722,6 +758,169 @@ async def get_teacher_courses(current_user_id: int = Depends(get_current_teacher
         
     except Exception as e:
         logger.error(f"Get teacher courses error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Wallet endpoints
+@app.get("/wallet/balance")
+async def get_wallet_balance(current_user: int = Depends(get_current_user)):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT wallet_balance FROM users WHERE id = ?", (current_user,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return {"balance": result['wallet_balance']}
+        return {"balance": 0}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/wallet/deposit")
+async def deposit_to_wallet(
+    payment_data: PaymentCreate, 
+    current_user: int = Depends(get_current_user)
+):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?",
+            (payment_data.amount, current_user)
+        )
+        
+        cursor.execute(
+            "INSERT INTO transactions (user_id, amount, type, description) VALUES (?, ?, ?, ?)",
+            (current_user, payment_data.amount, 'deposit', payment_data.description)
+        )
+        
+        cursor.execute("SELECT wallet_balance FROM users WHERE id = ?", (current_user,))
+        new_balance = cursor.fetchone()['wallet_balance']
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True, "new_balance": new_balance}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/wallet/transactions")
+async def get_wallet_transactions(current_user: int = Depends(get_current_user)):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM transactions 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC
+        """, (current_user,))
+        
+        transactions = cursor.fetchall()
+        conn.close()
+        
+        return {"transactions": rows_to_dict_list(transactions)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Exam endpoints
+@app.post("/teacher/exams")
+async def create_exam(
+    exam_data: ExamCreate, 
+    current_user: int = Depends(get_current_teacher)
+):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "INSERT INTO exams (class_id, teacher_id, title, description, questions, duration) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                exam_data.class_id,
+                current_user,
+                exam_data.title,
+                exam_data.description,
+                json.dumps(exam_data.questions),
+                exam_data.duration
+            )
+        )
+        
+        exam_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return {"success": True, "exam_id": exam_id}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/exams/{class_id}")
+async def get_class_exams(class_id: int, current_user: int = Depends(get_current_user)):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT e.*, u.full_name as teacher_name 
+            FROM exams e 
+            JOIN users u ON e.teacher_id = u.id 
+            WHERE e.class_id = ?
+        """, (class_id,))
+        
+        exams = cursor.fetchall()
+        conn.close()
+        
+        return {"exams": rows_to_dict_list(exams)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/exams/{exam_id}/submit")
+async def submit_exam(
+    exam_id: int,
+    exam_data: ExamSubmit,
+    current_user: int = Depends(get_current_student)
+):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Calculate score (simple implementation)
+        score = len([a for a in exam_data.answers if a.get('correct', False)])
+        
+        cursor.execute(
+            "INSERT INTO exam_results (exam_id, student_id, score, answers) VALUES (?, ?, ?, ?)",
+            (exam_id, current_user, score, json.dumps(exam_data.answers))
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True, "score": score}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/exam-results")
+async def get_exam_results(current_user: int = Depends(get_current_user)):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT er.*, e.title as exam_name, c.title as class_name
+            FROM exam_results er
+            JOIN exams e ON er.exam_id = e.id
+            JOIN classes c ON e.class_id = c.id
+            WHERE er.student_id = ?
+            ORDER BY er.completed_at DESC
+        """, (current_user,))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        return {"results": rows_to_dict_list(results)}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
