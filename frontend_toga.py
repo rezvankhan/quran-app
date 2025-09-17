@@ -1,8 +1,8 @@
-# Frontend-toga.py - سازگار با Python 3.13
+# Frontend-toga.py - سازگار با Toga جدید
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
-from toga import Dialog
+from toga import dialogs
 import requests
 import json
 import os
@@ -63,20 +63,16 @@ class QuranApp(toga.App):
 
     # توابع جدید برای dialog (سازگار با Toga جدید)
     def dialog_info(self, title, message):
-        dialog = Dialog(title=title)
-        dialog.text(message)
-        dialog.show()
+        dialogs.info(self.main_window, title, message)
 
     def dialog_error(self, title, message):
-        dialog = Dialog(title=title, style=Pack(color="red"))
-        dialog.text(message)
-        dialog.show()
+        dialogs.error(self.main_window, title, message)
 
     def dialog_confirm(self, title, message, on_confirm):
-        dialog = Dialog(title=title)
-        dialog.text(message)
-        dialog.on_result = on_confirm
-        dialog.show()
+        def callback(result):
+            if result:
+                on_confirm()
+        dialogs.confirm(self.main_window, title, message, callback)
     
     def startup(self):
         self.main_window = toga.MainWindow(
@@ -168,9 +164,124 @@ class QuranApp(toga.App):
         main_box.add(content_box)
         self.main_window.content = main_box
 
-    # بقیه توابع بدون تغییر می‌مانند...
-    # فقط جایگزین کردن main_window.info_dialog و main_window.error_dialog با:
-    # self.dialog_info() و self.dialog_error()
+    def show_register_student(self, widget):
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
+        
+        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="#2196F3", alignment=CENTER))
+        header_icon = toga.Label(
+            "👨‍🎓",
+            style=Pack(font_size=28, padding_right=10, color="white")
+        )
+        header_text = toga.Label(
+            "Student Registration",
+            style=Pack(color="white", font_size=20, font_weight="bold")
+        )
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        main_box.add(header_box)
+        
+        content_box = toga.Box(style=Pack(direction=COLUMN, padding=25, alignment=CENTER))
+        
+        self.name_input = toga.TextInput(
+            placeholder="Full Name", 
+            style=Pack(padding=10, width=300, background_color="#f8f9fa")
+        )
+        self.email_input = toga.TextInput(
+            placeholder="Email Address", 
+            style=Pack(padding=10, width=300, background_color="#f8f9fa")
+        )
+        self.password_input = toga.PasswordInput(
+            placeholder="Password", 
+            style=Pack(padding=10, width=300, background_color="#f8f9fa")
+        )
+        self.level_input = toga.Selection(
+            items=["Beginner", "Intermediate", "Advanced"],
+            style=Pack(padding=10, width=300)
+        )
+        
+        register_btn = toga.Button(
+            "🚀 Create Student Account",
+            on_press=self.register_student,
+            style=Pack(padding=15, background_color="#2196F3", color="white", width=250, font_weight="bold")
+        )
+        
+        back_btn = toga.Button(
+            "⬅ Back to Login",
+            on_press=self.show_login_screen,
+            style=Pack(padding=10, background_color="#6c757d", color="white", width=180)
+        )
+        
+        content_box.add(self.name_input)
+        content_box.add(self.email_input)
+        content_box.add(self.password_input)
+        content_box.add(self.level_input)
+        content_box.add(register_btn)
+        content_box.add(back_btn)
+        
+        main_box.add(content_box)
+        self.main_window.content = main_box
+
+    def show_register_teacher(self, widget):
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
+        
+        header_box = toga.Box(style=Pack(direction=ROW, padding=20, background_color="#FF9800", alignment=CENTER))
+        header_icon = toga.Label(
+            "👨‍🏫",
+            style=Pack(font_size=28, padding_right=10, color="white")
+        )
+        header_text = toga.Label(
+            "Teacher Registration",
+            style=Pack(color="white", font_size=20, font_weight="bold")
+        )
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        main_box.add(header_box)
+        
+        content_box = toga.Box(style=Pack(direction=COLUMN, padding=25, alignment=CENTER))
+        
+        self.teacher_username = toga.TextInput(
+            placeholder="Username", 
+            style=Pack(padding=10, width=300, background_color="#f8f9fa")
+        )
+        self.teacher_password = toga.PasswordInput(
+            placeholder="Password", 
+            style=Pack(padding=10, width=300, background_color="#f8f9fa")
+        )
+        self.teacher_name = toga.TextInput(
+            placeholder="Full Name", 
+            style=Pack(padding=10, width=300, background_color="#f8f9fa")
+        )
+        self.teacher_email = toga.TextInput(
+            placeholder="Email Address", 
+            style=Pack(padding=10, width=300, background_color="#f8f9fa")
+        )
+        self.teacher_specialty = toga.TextInput(
+            placeholder="Specialty (e.g., Tajweed, Recitation)", 
+            style=Pack(padding=10, width=300, background_color="#f8f9fa")
+        )
+        
+        register_btn = toga.Button(
+            "🚀 Create Teacher Account",
+            on_press=self.register_teacher,
+            style=Pack(padding=15, background_color="#FF9800", color="white", width=250, font_weight="bold")
+        )
+        
+        back_btn = toga.Button(
+            "⬅ Back to Login",
+            on_press=self.show_login_screen,
+            style=Pack(padding=10, background_color="#6c757d", color="white", width=180)
+        )
+        
+        content_box.add(self.teacher_username)
+        content_box.add(self.teacher_password)
+        content_box.add(self.teacher_name)
+        content_box.add(self.teacher_email)
+        content_box.add(self.teacher_specialty)
+        content_box.add(register_btn)
+        content_box.add(back_btn)
+        
+        main_box.add(content_box)
+        self.main_window.content = main_box
 
     def register_student(self, widget):
         try:
@@ -192,6 +303,38 @@ class QuranApp(toga.App):
             
             if response.status_code == 200:
                 self.dialog_info("Success", "Student registration successful! Please login with your email.")
+                self.show_login_screen()
+            else:
+                error_msg = response.json().get("detail", "Registration failed")
+                self.dialog_error("Error", f"Registration failed: {error_msg}")
+                
+        except Exception as e:
+            self.dialog_error("Error", f"Connection error: {str(e)}")
+
+    def register_teacher(self, widget):
+        try:
+            username = self.teacher_username.value.strip()
+            password = self.teacher_password.value
+            full_name = self.teacher_name.value.strip()
+            email = self.teacher_email.value.strip()
+            specialty = self.teacher_specialty.value.strip()
+            
+            if not all([username, password, full_name, email, specialty]):
+                self.dialog_error("Error", "Please fill all fields")
+                return
+            
+            response = requests.post(
+                f"{self.BASE_URL}/register/teacher",
+                json={
+                    "username": username, "password": password, 
+                    "full_name": full_name, "email": email, "specialty": specialty
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                self.dialog_info("Success", "Teacher registration successful! Please login with your username.")
                 self.show_login_screen()
             else:
                 error_msg = response.json().get("detail", "Registration failed")
@@ -245,6 +388,186 @@ class QuranApp(toga.App):
                 
         except Exception as e:
             self.dialog_error("Error", f"Connection error: {str(e)}")
+
+    def show_teacher_dashboard(self, user_data):
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
+        
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#0D8E3D", alignment=CENTER))
+        header_icon = toga.Label(
+            "👨‍🏫",
+            style=Pack(font_size=24, padding_right=10, color="white")
+        )
+        header_text = toga.Label(
+            f"Teacher: {user_data['full_name']}",
+            style=Pack(color="white", font_size=18, font_weight="bold", flex=1)
+        )
+        logout_btn = toga.Button(
+            "🚪 Logout",
+            on_press=self.logout,
+            style=Pack(padding=8, background_color="#f44336", color="white")
+        )
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        header_box.add(logout_btn)
+        main_box.add(header_box)
+        
+        content_box = toga.Box(style=Pack(direction=COLUMN, padding=20, alignment=CENTER))
+        
+        info_box = toga.Box(style=Pack(direction=COLUMN, padding=10, background_color="#f5f5f5"))
+        info_box.add(toga.Label(f"📧 Email: {user_data['email']}", style=Pack(padding=5)))
+        info_box.add(toga.Label(f"🎯 Specialty: {user_data.get('specialty', 'General')}", style=Pack(padding=5)))
+        content_box.add(info_box)
+        
+        quran_types_label = toga.Label(
+            "Select Quran Course Type:",
+            style=Pack(padding=10, font_weight="bold")
+        )
+        
+        self.quran_type_combo = toga.Selection(
+            items=[
+                "Tajweed Fundamentals",
+                "Quran Recitation (Tartil)",
+                "Quran Recitation (Tahqeeq)",
+                "Quran Recitation (Tadweer)",
+                "Quran Memorization (Hifz)",
+                "Quran Tafsir",
+                "Quran Translation",
+                "Arabic Pronunciation",
+                "Voice and Melody"
+            ],
+            style=Pack(padding=10, width=250)
+        )
+        
+        content_box.add(quran_types_label)
+        content_box.add(self.quran_type_combo)
+        
+        content_box.add(toga.Button(
+            "📖 My Classes", 
+            on_press=self.show_teacher_classes,
+            style=Pack(padding=15, width=200, background_color="#2196F3", color="white")
+        ))
+        
+        content_box.add(toga.Button(
+            "➕ Create New Course", 
+            on_press=self.create_class,
+            style=Pack(padding=15, width=200, background_color="#4CAF50", color="white")
+        ))
+        
+        content_box.add(toga.Button(
+            "👥 My Students", 
+            on_press=self.show_teacher_students,
+            style=Pack(padding=15, width=200, background_color="#FF9800", color="white")
+        ))
+        
+        content_box.add(toga.Button(
+            "📈 Statistics", 
+            on_press=self.show_teacher_stats,
+            style=Pack(padding=15, width=200, background_color="#9C27B0", color="white")
+        ))
+        
+        main_box.add(content_box)
+        self.main_window.content = main_box
+
+    def show_student_dashboard(self, user_data):
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=0, alignment=CENTER))
+        
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#0D8E3D", alignment=CENTER))
+        header_icon = toga.Label(
+            "👨‍🎓",
+            style=Pack(font_size=24, padding_right=10, color="white")
+        )
+        header_text = toga.Label(
+            f"Student: {user_data['full_name']}",
+            style=Pack(color="white", font_size=18, font_weight="bold", flex=1)
+        )
+        logout_btn = toga.Button(
+            "🚪 Logout",
+            on_press=self.logout,
+            style=Pack(padding=8, background_color="#f44336", color="white")
+        )
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        header_box.add(logout_btn)
+        main_box.add(header_box)
+        
+        content_box = toga.Box(style=Pack(direction=COLUMN, padding=20, alignment=CENTER))
+        
+        info_box = toga.Box(style=Pack(direction=COLUMN, padding=10, background_color="#f5f5f5"))
+        info_box.add(toga.Label(f"📧 Email: {user_data['email']}", style=Pack(padding=5)))
+        info_box.add(toga.Label(f"🆔 Student ID: {user_data['id']}", style=Pack(padding=5)))
+        content_box.add(info_box)
+        
+        content_box.add(toga.Button(
+            "📚 My Courses", 
+            on_press=self.show_student_courses,
+            style=Pack(padding=15, width=200, background_color="#2196F3", color="white")
+        ))
+        
+        content_box.add(toga.Button(
+            "📊 My Progress", 
+            on_press=self.show_student_progress,
+            style=Pack(padding=15, width=200, background_color="#4CAF50", color="white")
+        ))
+        
+        content_box.add(toga.Button(
+            "👨‍🏫 Find Teachers", 
+            on_press=self.find_teachers,
+            style=Pack(padding=15, width=200, background_color="#FF9800", color="white")
+        ))
+        
+        content_box.add(toga.Button(
+            "📅 My Schedule", 
+            on_press=self.show_student_schedule,
+            style=Pack(padding=15, width=200, background_color="#9C27B0", color="white")
+        ))
+        
+        main_box.add(content_box)
+        self.main_window.content = main_box
+
+    def show_student_courses(self, widget):
+        response = self.make_authenticated_request("GET", "/my-courses")
+        if response and response.status_code == 200:
+            courses = response.json().get('my_courses', [])
+            courses_list = "\n".join([f"📖 {course['title']} - Progress: {course.get('progress', 0)}%" for course in courses])
+            self.dialog_info("My Courses", courses_list or "No courses enrolled")
+        else:
+            self.dialog_error("Error", "Failed to load courses")
+
+    def show_teacher_classes(self, widget):
+        response = self.make_authenticated_request("GET", "/teacher/courses")
+        if response and response.status_code == 200:
+            courses = response.json().get('courses', [])
+            courses_list = "\n".join([f"🎯 {course['title']} - Students: {course.get('enrolled_students', 0)}" for course in courses])
+            self.dialog_info("My Classes", courses_list or "No classes created")
+        else:
+            self.dialog_error("Error", "Failed to load classes")
+
+    def create_class(self, widget):
+        try:
+            selected_type = self.quran_type_combo.value
+            if not selected_type:
+                self.dialog_info("Error", "Please select a Quran course type")
+                return
+            
+            self.show_create_course_form(selected_type)
+            
+        except Exception as e:
+            self.dialog_error("Error", f"Error creating course: {str(e)}")
+
+    def show_student_progress(self, widget):
+        self.dialog_info("Progress", "Your progress report will appear here")
+
+    def find_teachers(self, widget):
+        self.dialog_info("Find Teachers", "Available teachers list will appear here")
+
+    def show_student_schedule(self, widget):
+        self.dialog_info("Schedule", "Your class schedule will appear here")
+
+    def show_teacher_students(self, widget):
+        self.dialog_info("My Students", "List of your students will appear here")
+
+    def show_teacher_stats(self, widget):
+        self.dialog_info("Statistics", "Teaching statistics will appear here")
 
 def main():
     return QuranApp()
