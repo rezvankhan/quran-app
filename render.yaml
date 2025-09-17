@@ -1,87 +1,36 @@
-version: 1
-
-databases:
-  - name: quran-db
-    databaseName: quran_db
-    user: quran_user
-    plan: free
-    region: frankfurt
-
+# render.yaml
 services:
   - type: web
-    name: quran-app-api
+    name: quran-academy-backend
     env: python
-    region: frankfurt
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn backend:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: PORT
-        fromService:
-          type: web
-          name: quran-app-api
-          property: port
       - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: JWT_SECRET
+        value: 3.11.9
+      - key: SECRET_KEY
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: quran-db
-          property: connectionString
-      - key: ALLOWED_ORIGINS
-        value: "*"
-    disk:
-      - name: uploads
-        sizeGB: 1
-        mountPath: /app/uploads
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 3600
+    healthCheckPath: /health
+    autoDeploy: true
 
+  # اگر frontend هم میخواید روی Render باشه (اختیاری)
   - type: web
-    name: quran-app-frontend
-    env: static
-    region: frankfurt
+    name: quran-academy-frontend
+    env: python
     plan: free
-    buildCommand: |
-      echo "Building frontend static files..."
-      mkdir -p dist
-      cp -r assets/* dist/ 2>/dev/null || true
-      # ایجاد فایل config.js برای API URL
-      echo "const API_URL = 'https://quran-app-api.onrender.com';" > dist/config.js
-    staticPublishPath: ./dist
+    buildCommand: pip install -r requirements.txt
+    startCommand: python Frontend-toga.py
     envVars:
-      - key: API_URL
-        value: https://quran-app-api.onrender.com
-    routes:
-      - type: redirect
-        source: /api/*
-        destination: https://quran-app-api.onrender.com/api/*
-        permanent: false
-
-autoDeploy: true
-branch: main
-
-healthCheckPath: /health
-healthCheckTimeout: 300
-
-headers:
-  - path: /*
-    values:
-      X-Frame-Options: DENY
-      X-Content-Type-Options: nosniff
-      X-XSS-Protection: 1; mode=block
-
-ssl:
-  enabled: true
-
-buildCaching:
-  paths:
-    - ~/.cache/pip
-  policy: pull-push
-
-logging:
-  enabled: true
-  level: info
-
-rateLimiting:
-  enabled: true
-  requestsPerMinute: 100
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: BASE_URL
+        fromService:
+          name: quran-academy-backend
+          type: web
+          property: url
+    autoDeploy: true
