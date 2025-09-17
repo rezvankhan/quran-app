@@ -664,4 +664,4 @@ def main():
 
 if __name__ == "__main__":
     app = main()
-    app.main_loop()
+    app.main_loop()     Frontend-toga.py این
