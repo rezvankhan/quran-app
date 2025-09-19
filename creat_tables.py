@@ -1,4 +1,4 @@
-# creat_tables.py - کامل
+# creat_tables.py - کامل با جداول دروس و پیشرفت
 import sqlite3
 import os
 from passlib.context import CryptContext
@@ -18,6 +18,7 @@ def create_tables():
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
+        # جداول اصلی موجود
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -125,6 +126,49 @@ def create_tables():
             )
         """)
         
+        # جداول جدید برای فاز یک - سیستم آموزشی
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS lessons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                class_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content_type TEXT DEFAULT 'text',
+                content_url TEXT,
+                duration INTEGER DEFAULT 0,
+                order_index INTEGER DEFAULT 0,
+                description TEXT,
+                is_published BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (class_id) REFERENCES classes (id) ON DELETE CASCADE
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS lesson_progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL,
+                lesson_id INTEGER NOT NULL,
+                class_id INTEGER NOT NULL,
+                is_completed BOOLEAN DEFAULT FALSE,
+                completed_at TIMESTAMP,
+                progress_percentage INTEGER DEFAULT 0,
+                last_position INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (student_id) REFERENCES users (id) ON DELETE CASCADE,
+                FOREIGN KEY (lesson_id) REFERENCES lessons (id) ON DELETE CASCADE,
+                FOREIGN KEY (class_id) REFERENCES classes (id) ON DELETE CASCADE,
+                UNIQUE(student_id, lesson_id)
+            )
+        """)
+        
+        # ایجاد ایندکس برای بهبود عملکرد
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lessons_class_id ON lessons(class_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lessons_order ON lessons(class_id, order_index)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lesson_progress_student ON lesson_progress(student_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lesson_progress_lesson ON lesson_progress(lesson_id)")
+        
         conn.commit()
         conn.close()
         print("✅ Database tables created successfully")
@@ -200,6 +244,22 @@ def init_sample_data():
                 print(f"⚠️  Duplicate enrollment skipped: {enrollment}")
                 continue
         
+        # اضافه کردن داده‌های نمونه برای دروس
+        lessons = [
+            (class_ids[0], 'Introduction to Arabic Letters', 'text', None, 15, 1, 'Learn the basics of Arabic alphabet', True),
+            (class_ids[0], 'Basic Pronunciation', 'video', 'https://example.com/video1.mp4', 20, 2, 'Practice basic sounds', True),
+            (class_ids[0], 'Reading Practice', 'text', None, 25, 3, 'Practice reading simple words', True),
+            (class_ids[1], 'Tajweed Rules Overview', 'text', None, 30, 1, 'Introduction to Tajweed rules', True),
+            (class_ids[1], 'Practice Session 1', 'audio', 'https://example.com/audio1.mp3', 25, 2, 'First practice session', True),
+            (class_ids[2], 'Advanced Techniques', 'video', 'https://example.com/video2.mp4', 40, 1, 'Learn advanced recitation techniques', True)
+        ]
+        
+        for lesson in lessons:
+            cursor.execute(
+                "INSERT INTO lessons (class_id, title, content_type, content_url, duration, order_index, description, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                lesson
+            )
+        
         conn.commit()
         conn.close()
         print("✅ Sample data inserted successfully")
@@ -208,6 +268,7 @@ def init_sample_data():
         print("Teacher: teacher1 / teacher123 (Balance: $500)")
         print("Student 1: student1@quran.com / student123 (Balance: $50)")
         print("Student 2: student2@quran.com / student123 (Balance: $75)")
+        print("\n📚 Sample courses now include lessons for testing")
         
     except Exception as err:
         print(f"❌ Error inserting sample data: {err}")
