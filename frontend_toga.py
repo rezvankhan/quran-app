@@ -521,14 +521,12 @@ class QuranApp(toga.App):
         main_box.add(content_box)
         self.main_window.content = main_box
 
-    
-# با این جایگزین کنید:
     def show_wallet(self, widget):
         response = self.make_authenticated_request("GET", "/wallet/balance")
         if response and response.status_code == 200:
             balance = response.json().get('balance', 0)
         
-        # ایجاد صفحه کیف پول
+            # ایجاد صفحه کیف پول
             main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
         
             header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#607D8B", alignment=CENTER))
@@ -542,7 +540,7 @@ class QuranApp(toga.App):
                                  style=Pack(padding=20, font_size=16, font_weight="bold"))
             main_box.add(balance_label)
         
-        # فیلد مقدار واریزی
+            # فیلد مقدار واریزی
             amount_label = toga.Label("Amount to deposit:", style=Pack(padding=5))
             self.deposit_amount = toga.NumberInput(value=10, style=Pack(padding=10, width=200))
         
@@ -563,9 +561,8 @@ class QuranApp(toga.App):
         else:
             self.main_window.error_dialog("Error", "Failed to load wallet balance")
     
-    
     def create_exam(self, widget):
-    # ابتدا دوره‌های معلم را بگیر
+        # ابتدا دوره‌های معلم را بگیر
         response = self.make_authenticated_request("GET", "/teacher/courses")
         if response and response.status_code == 200:
             courses = response.json().get('courses', [])
@@ -583,12 +580,12 @@ class QuranApp(toga.App):
         header_box.add(header_text)
         main_box.add(header_box)
     
-    # انتخاب دوره
+        # انتخاب دوره
         course_label = toga.Label("Select Course:", style=Pack(padding=10))
         course_options = [f"{course['id']} - {course['title']}" for course in courses]
         self.course_selection = toga.Selection(items=course_options, style=Pack(padding=10, width=300))
     
-    # فیلدهای آزمون
+        # فیلدهای آزمون
         title_label = toga.Label("Exam Title:", style=Pack(padding=5))
         self.exam_title = toga.TextInput(placeholder="Enter exam title", style=Pack(padding=10))
     
@@ -615,7 +612,34 @@ class QuranApp(toga.App):
         self.main_window.content = main_box
 
     def submit_exam(self, widget):
-        self.main_window.info_dialog("Info", "Exam creation will be implemented in next version")
+        try:
+            selected_course = self.course_selection.value
+            course_id = selected_course.split(" - ")[0] if selected_course else None
+            title = self.exam_title.value.strip()
+            description = self.exam_description.value.strip()
+            
+            if not all([course_id, title]):
+                self.main_window.error_dialog("Error", "Please select a course and enter a title")
+                return
+            
+            response = self.make_authenticated_request(
+                "POST", 
+                "/exams/create",
+                json={
+                    "course_id": course_id,
+                    "title": title,
+                    "description": description
+                }
+            )
+            
+            if response and response.status_code == 200:
+                self.main_window.info_dialog("Success", "Exam created successfully!")
+                self.show_teacher_dashboard(self.current_user)
+            else:
+                self.main_window.error_dialog("Error", "Failed to create exam")
+                
+        except Exception as e:
+            self.main_window.error_dialog("Error", f"Exam creation error: {str(e)}")
 
     def deposit_money(self, widget):
         try:
@@ -630,7 +654,7 @@ class QuranApp(toga.App):
             if response and response.status_code == 200:
                 new_balance = response.json().get('new_balance', 0)
                 self.main_window.info_dialog("Success", f"Deposit successful!\nNew balance: ${new_balance}")
-            # بازگشت به dashboard
+                # بازگشت به dashboard
                 if self.user_role == 'teacher':
                     self.show_teacher_dashboard(self.current_user)
                 else:
@@ -660,7 +684,73 @@ class QuranApp(toga.App):
             self.main_window.error_dialog("Error", "Failed to load classes")
 
     def create_class(self, widget):
-        self.main_window.info_dialog("Create Class", "Class creation functionality will be implemented in the next version.")
+        # Create a form for class creation
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
+        
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#4CAF50", alignment=CENTER))
+        header_icon = toga.Label("➕", style=Pack(font_size=24, padding_right=10, color="white"))
+        header_text = toga.Label("Create New Course", style=Pack(color="white", font_size=18, font_weight="bold"))
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        main_box.add(header_box)
+        
+        # Form fields
+        title_label = toga.Label("Course Title:", style=Pack(padding=5))
+        self.course_title = toga.TextInput(placeholder="Enter course title", style=Pack(padding=10))
+        
+        desc_label = toga.Label("Description:", style=Pack(padding=5))
+        self.course_description = toga.TextInput(placeholder="Enter course description", style=Pack(padding=10))
+        
+        price_label = toga.Label("Price ($):", style=Pack(padding=5))
+        self.course_price = toga.NumberInput(value=0, style=Pack(padding=10))
+        
+        create_btn = toga.Button("Create Course", 
+                           on_press=self.submit_course,
+                           style=Pack(padding=15, background_color="#4CAF50", color="white", width=180))
+        
+        back_btn = toga.Button("⬅ Back", 
+                         on_press=lambda w: self.show_teacher_dashboard(self.current_user),
+                         style=Pack(padding=10, background_color="#6c757d", color="white", width=120))
+        
+        main_box.add(title_label)
+        main_box.add(self.course_title)
+        main_box.add(desc_label)
+        main_box.add(self.course_description)
+        main_box.add(price_label)
+        main_box.add(self.course_price)
+        main_box.add(create_btn)
+        main_box.add(back_btn)
+        
+        self.main_window.content = main_box
+
+    def submit_course(self, widget):
+        try:
+            title = self.course_title.value.strip()
+            description = self.course_description.value.strip()
+            price = self.course_price.value
+            
+            if not title:
+                self.main_window.error_dialog("Error", "Please enter a course title")
+                return
+            
+            response = self.make_authenticated_request(
+                "POST", 
+                "/courses/create",
+                json={
+                    "title": title,
+                    "description": description,
+                    "price": price
+                }
+            )
+            
+            if response and response.status_code == 200:
+                self.main_window.info_dialog("Success", "Course created successfully!")
+                self.show_teacher_dashboard(self.current_user)
+            else:
+                self.main_window.error_dialog("Error", "Failed to create course")
+                
+        except Exception as e:
+            self.main_window.error_dialog("Error", f"Course creation error: {str(e)}")
 
     def show_student_progress(self, widget):
         response = self.make_authenticated_request("GET", "/my-courses")
@@ -680,6 +770,15 @@ class QuranApp(toga.App):
             self.main_window.info_dialog("Available Teachers", teachers_list or "No teachers available")
         else:
             self.main_window.error_dialog("Error", "Failed to load teachers list")
+
+    def show_exams(self, widget):
+        response = self.make_authenticated_request("GET", "/my-exams")
+        if response and response.status_code == 200:
+            exams = response.json().get('exams', [])
+            exams_list = "\n".join([f"📝 {exam['title']} - Course: {exam.get('course_title', 'Unknown')}" for exam in exams])
+            self.main_window.info_dialog("My Exams", exams_list or "No exams available")
+        else:
+            self.main_window.error_dialog("Error", "Failed to load exams")
 
     def show_student_schedule(self, widget):
         response = self.make_authenticated_request("GET", "/my-courses")
@@ -710,8 +809,7 @@ class QuranApp(toga.App):
             total_income = sum(course.get('price', 0) * course.get('enrolled_students', 0) for course in courses)
             
             stats_text = f"""📊 Teaching Statistics:
-    
-    
+
 Total Courses: {total_courses}
 Total Students: {total_students}
 Estimated Income: ${total_income}
