@@ -521,28 +521,125 @@ class QuranApp(toga.App):
         main_box.add(content_box)
         self.main_window.content = main_box
 
+    
+# با این جایگزین کنید:
     def show_wallet(self, widget):
         response = self.make_authenticated_request("GET", "/wallet/balance")
         if response and response.status_code == 200:
             balance = response.json().get('balance', 0)
-            self.main_window.info_dialog("Wallet Balance", f"Your balance: ${balance}\n\nYou can deposit funds through the payment system.")
+        
+        # ایجاد صفحه کیف پول
+            main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
+        
+            header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#607D8B", alignment=CENTER))
+            header_icon = toga.Label("💰", style=Pack(font_size=24, padding_right=10, color="white"))
+            header_text = toga.Label("Wallet Management", style=Pack(color="white", font_size=18, font_weight="bold"))
+            header_box.add(header_icon)
+            header_box.add(header_text)
+            main_box.add(header_box)
+        
+            balance_label = toga.Label(f"Current Balance: ${balance}", 
+                                 style=Pack(padding=20, font_size=16, font_weight="bold"))
+            main_box.add(balance_label)
+        
+        # فیلد مقدار واریزی
+            amount_label = toga.Label("Amount to deposit:", style=Pack(padding=5))
+            self.deposit_amount = toga.NumberInput(value=10, style=Pack(padding=10, width=200))
+        
+            deposit_btn = toga.Button("💳 Deposit", 
+                                on_press=self.deposit_money,
+                                style=Pack(padding=15, background_color="#4CAF50", color="white", width=180))
+        
+            back_btn = toga.Button("⬅ Back", 
+                             on_press=lambda w: self.show_teacher_dashboard(self.current_user) if self.user_role == 'teacher' else self.show_student_dashboard(self.current_user),
+                             style=Pack(padding=10, background_color="#6c757d", color="white", width=120))
+        
+            main_box.add(amount_label)
+            main_box.add(self.deposit_amount)
+            main_box.add(deposit_btn)
+            main_box.add(back_btn)
+        
+            self.main_window.content = main_box
         else:
             self.main_window.error_dialog("Error", "Failed to load wallet balance")
-
+    
+    
     def create_exam(self, widget):
-        self.main_window.info_dialog("Create Exam", "Exam creation functionality will be implemented in the next version.")
-
-    def show_exams(self, widget):
-        response = self.make_authenticated_request("GET", "/my-courses")
+    # ابتدا دوره‌های معلم را بگیر
+        response = self.make_authenticated_request("GET", "/teacher/courses")
         if response and response.status_code == 200:
-            courses = response.json().get('my_courses', [])
-            if courses:
-                course_list = "\n".join([f"📖 {course['title']}" for course in courses])
-                self.main_window.info_dialog("Your Courses", f"You can take exams for:\n\n{course_list}")
-            else:
-                self.main_window.info_dialog("Exams", "You are not enrolled in any courses yet.")
+            courses = response.json().get('courses', [])
+            self.show_exam_creation_form(courses)
         else:
-            self.main_window.error_dialog("Error", "Failed to load your courses")
+            self.main_window.error_dialog("Error", "Failed to load courses")
+        
+    def show_exam_creation_form(self, courses):
+        main_box = toga.Box(style=Pack(direction=COLUMN, padding=20))
+    
+        header_box = toga.Box(style=Pack(direction=ROW, padding=15, background_color="#795548", alignment=CENTER))
+        header_icon = toga.Label("📝", style=Pack(font_size=24, padding_right=10, color="white"))
+        header_text = toga.Label("Create New Exam", style=Pack(color="white", font_size=18, font_weight="bold"))
+        header_box.add(header_icon)
+        header_box.add(header_text)
+        main_box.add(header_box)
+    
+    # انتخاب دوره
+        course_label = toga.Label("Select Course:", style=Pack(padding=10))
+        course_options = [f"{course['id']} - {course['title']}" for course in courses]
+        self.course_selection = toga.Selection(items=course_options, style=Pack(padding=10, width=300))
+    
+    # فیلدهای آزمون
+        title_label = toga.Label("Exam Title:", style=Pack(padding=5))
+        self.exam_title = toga.TextInput(placeholder="Enter exam title", style=Pack(padding=10))
+    
+        desc_label = toga.Label("Description:", style=Pack(padding=5))
+        self.exam_description = toga.TextInput(placeholder="Enter description", style=Pack(padding=10))
+    
+        create_btn = toga.Button("Create Exam", 
+                           on_press=self.submit_exam,
+                           style=Pack(padding=15, background_color="#795548", color="white", width=180))
+    
+        back_btn = toga.Button("⬅ Back", 
+                         on_press=lambda w: self.show_teacher_dashboard(self.current_user),
+                         style=Pack(padding=10, background_color="#6c757d", color="white", width=120))
+    
+        main_box.add(course_label)
+        main_box.add(self.course_selection)
+        main_box.add(title_label)
+        main_box.add(self.exam_title)
+        main_box.add(desc_label)
+        main_box.add(self.exam_description)
+        main_box.add(create_btn)
+        main_box.add(back_btn)
+        
+        self.main_window.content = main_box
+
+    def submit_exam(self, widget):
+        self.main_window.info_dialog("Info", "Exam creation will be implemented in next version")
+
+    def deposit_money(self, widget):
+        try:
+            amount = self.deposit_amount.value
+            if not amount or amount <= 0:
+                self.main_window.error_dialog("Error", "Please enter a valid amount")
+                return
+        
+            response = self.make_authenticated_request("POST", "/wallet/deposit", 
+                                                 json={"amount": amount, "description": "Deposit from app"})
+        
+            if response and response.status_code == 200:
+                new_balance = response.json().get('new_balance', 0)
+                self.main_window.info_dialog("Success", f"Deposit successful!\nNew balance: ${new_balance}")
+            # بازگشت به dashboard
+                if self.user_role == 'teacher':
+                    self.show_teacher_dashboard(self.current_user)
+                else:
+                    self.show_student_dashboard(self.current_user)
+            else:
+                self.main_window.error_dialog("Error", "Deposit failed")
+            
+        except Exception as e:
+            self.main_window.error_dialog("Error", f"Deposit error: {str(e)}")
 
     def show_student_courses(self, widget):
         response = self.make_authenticated_request("GET", "/my-courses")
@@ -613,7 +710,8 @@ class QuranApp(toga.App):
             total_income = sum(course.get('price', 0) * course.get('enrolled_students', 0) for course in courses)
             
             stats_text = f"""📊 Teaching Statistics:
-
+    
+    
 Total Courses: {total_courses}
 Total Students: {total_students}
 Estimated Income: ${total_income}
